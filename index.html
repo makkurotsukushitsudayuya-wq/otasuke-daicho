@@ -307,18 +307,29 @@ document.querySelectorAll('.tab').forEach(function (t) {
 $('gateBtn').onclick = function () {
   var code = $('gateCode').value.trim();
   if (!code) return;
+  var done = function () { $('gateBtn').disabled = false; $('gateBtn').textContent = 'はじめる'; };
   $('gateBtn').disabled = true;
+  $('gateBtn').textContent = '確認中…（少しかかります）';
   call('getEditorData', [code], function (data) {
-    $('gateBtn').disabled = false;
+    done();
     state.code = code;
     store('faqEditorCode', code);
     start(data);
-  }, function () { $('gateBtn').disabled = false; });
+  }, done);
 };
+
+// 前回読み込んだ台帳を端末に覚えておき、次に開いたときはすぐ表示する(最新は裏で読み込む)
+function setData(data) {
+  state.data = data;
+  store('faqDataCache', JSON.stringify(data));
+}
+function loadCache() {
+  try { return JSON.parse(store('faqDataCache') || 'null'); } catch (e) { return null; }
+}
 $('gateCode').onkeydown = function (e) { if (e.key === 'Enter') $('gateBtn').click(); };
 
 function start(data) {
-  state.data = data;
+  setData(data);
   var hasChoices = data.stores.length || data.members.length;
   if (!store('faqDeviceDone') && hasChoices) {
     fillStoreSelect($('setupStore'), deviceStore());
@@ -413,7 +424,7 @@ function renderAlert() {
 $('alert').onclick = function () { setStatus('empty'); switchTab('list'); };
 
 function refresh() {
-  call('getEditorData', [state.code], function (data) { state.data = data; renderAll(); });
+  call('getEditorData', [state.code], function (data) { setData(data); renderAll(); });
 }
 
 // ---------- すばやく質問を足す ----------
@@ -468,6 +479,7 @@ function sendQueue() {
     saveQueue(loadQueue().filter(function (j) { return j.id !== job.id; }));
     var it = job.item;
     state.data.items.push({ row: res.row, category: it.category, question: it.question, answer: '', scope: it.scope, store: it.store, updatedBy: it.updatedBy, updatedAt: '' });
+    setData(state.data);
     setRecentStatus(job.id, 'ok');
     renderAlert();
     sendQueue();
@@ -604,7 +616,7 @@ $('eSave').onclick = function () {
   $('eSave').disabled = true;
   call('saveFaq', [state.code, item], function (data) {
     $('eSave').disabled = false;
-    state.data = data;
+    setData(data);
     renderAll();
     toast('更新しました');
     switchTab('list');
@@ -617,7 +629,7 @@ $('eDelete').onclick = function () {
   $('eDelete').disabled = true;
   call('deleteFaq', [state.code, it.row, it.question], function (data) {
     $('eDelete').disabled = false;
-    state.data = data;
+    setData(data);
     renderAll();
     toast('削除しました');
     switchTab('list');
@@ -633,6 +645,7 @@ $('adminOpen').onclick = function () {
     store('faqAdminCode', code);
     state.data.stores = settings.stores;
     state.data.members = settings.members;
+    setData(state.data);
     openAdminEditor();
   });
 };
@@ -693,6 +706,7 @@ $('adminSave').onclick = function () {
     $('adminSave').disabled = false;
     state.data.stores = saved.stores;
     state.data.members = saved.members;
+    setData(state.data);
     renderDeviceSettings();
     toast('リストを保存しました');
   }, function (msg) {
@@ -709,7 +723,10 @@ $('adminSave').onclick = function () {
 // ---------- 起動 ----------
 state.code = store('faqEditorCode');
 state.adminCode = store('faqAdminCode');
-if (state.code) {
+if (state.code && loadCache()) {
+  start(loadCache());
+  refresh();
+} else if (state.code) {
   call('getEditorData', [state.code], start);
 } else {
   showGate();

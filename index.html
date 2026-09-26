@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>お助けボット 台帳</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --text: #1f2328; --muted: #6a737d; --line: #d9dde3;
+    --accent: #2563eb; --accent-text: #ffffff; --warn-bg: #fff4e5; --warn: #b45309;
+    --danger: #c62828; --ok: #2e7d32; --chip: #eef2f7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16181c; --card: #1f2227; --text: #e8eaed; --muted: #9aa0a6; --line: #3a3f47;
+      --accent: #5b8def; --accent-text: #0b0d10; --warn-bg: #3a2a12; --warn: #f5b25a;
+      --danger: #ef6b6b; --ok: #6cc070; --chip: #2a2e35;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif; font-size: 16px; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--card); border-bottom: 1px solid var(--line); }
+  .bar { max-width: 760px; margin: 0 auto; padding: 10px 16px 0; }
+  h1 { font-size: 17px; margin: 0 0 8px; }
+  h2 { font-size: 15px; margin: 0 0 10px; }
+  .alert { display: none; width: 100%; text-align: left; border: 0; border-radius: 8px; padding: 8px 12px; margin-bottom: 8px; background: var(--warn-bg); color: var(--warn); font-size: 14px; font-weight: 600; cursor: pointer; }
+  .alert.show { display: block; }
+  .tabs { display: flex; }
+  .tab { flex: 1; padding: 10px 0; border: 0; border-bottom: 3px solid transparent; background: none; color: var(--muted); font-size: 15px; font-weight: 600; cursor: pointer; }
+  .tab.gear { flex: 0 0 56px; }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  main { max-width: 760px; margin: 0 auto; padding: 16px; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 12px; }
+  .field { display: block; margin-bottom: 14px; }
+  .label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 14px; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  input[type=text], input[type=password], select, textarea {
+    width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); font-size: 16px; font-family: inherit;
+  }
+  textarea { min-height: 80px; resize: vertical; }
+  #qInput { min-height: 72px; font-size: 17px; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { flex: 1; padding: 10px; border: 0; background: var(--card); color: var(--text); font-size: 15px; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button.on { background: var(--accent); color: var(--accent-text); font-weight: 600; }
+  .btn { padding: 12px 18px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--text); font-size: 15px; font-weight: 600; cursor: pointer; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  .btn.big { width: 100%; padding: 16px; font-size: 17px; margin-top: 10px; }
+  .btn.danger { color: var(--danger); border-color: var(--danger); }
+  .btn.small { padding: 6px 10px; font-size: 13px; }
+  .btn.link { border: 0; background: none; color: var(--accent); padding: 0 4px; font-size: 13px; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .row-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .row-btns .primary { flex: 1; }
+  .quick-meta { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; color: var(--muted); }
+  .quick-meta select { width: auto; padding: 4px 8px; font-size: 14px; }
+  .who { margin-top: 10px; font-size: 13px; color: var(--muted); }
+  .similar { display: none; margin-top: 6px; padding: 6px 10px; border-radius: 8px; background: var(--warn-bg); color: var(--warn); font-size: 12px; }
+  .similar.show { display: block; }
+  .recent-item { display: flex; gap: 8px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .recent-item:first-of-type { border-top: 0; }
+  .st { flex: 0 0 auto; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--chip); color: var(--muted); }
+  .st.ok { color: var(--ok); }
+  .st.ng { color: var(--danger); }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .filters .seg { flex: 1 1 100%; }
+  .filters select, .filters input { flex: 1 1 150px; }
+  .count { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+  .item { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; cursor: pointer; }
+  .item.empty { border-left: 4px solid var(--danger); }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+  .chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--chip); color: var(--muted); }
+  .chip.staff { color: var(--warn); }
+  .q { font-weight: 600; margin-bottom: 4px; }
+  .a { font-size: 14px; white-space: pre-wrap; }
+  .a.none { color: var(--danger); font-weight: 600; }
+  .meta { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .empty-state { text-align: center; color: var(--muted); padding: 32px 0; }
+  .list-row { display: flex; gap: 6px; margin-bottom: 6px; }
+  .list-row input { flex: 1 1 auto; }
+  .list-row select { flex: 0 0 38%; }
+  #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #222; color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: calc(100% - 32px); z-index: 10; }
+  #toast.show { opacity: 1; }
+  #toast.err { background: var(--danger); }
+  .screen { max-width: 420px; margin: 48px auto; padding: 0 16px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- 合言葉 -->
+<div id="gate" class="screen hidden">
+  <div class="card">
+    <h1>お助けボット 台帳</h1>
+    <label class="field">
+      <span class="label">合言葉</span>
+      <input type="password" id="gateCode" autocomplete="off">
+    </label>
+    <button class="btn primary big" id="gateBtn">はじめる</button>
+  </div>
+</div>
+
+<!-- 初回だけ: この端末の店舗と名前 -->
+<div id="setup" class="screen hidden">
+  <div class="card">
+    <h1>はじめに</h1>
+    <p class="hint" style="margin-top:0">次から自動で入るので、1回だけ選んでください。</p>
+    <label class="field"><span class="label">店舗</span><select id="setupStore"></select></label>
+    <label class="field"><span class="label">名前</span><select id="setupName"></select></label>
+    <button class="btn primary big" id="setupBtn">これで始める</button>
+    <button class="btn link" id="setupSkip" style="margin-top:12px">あとで</button>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+  <header>
+    <div class="bar">
+      <h1>お助けボット 台帳</h1>
+      <button class="alert" id="alert"></button>
+      <div class="tabs">
+        <button class="tab active" data-tab="quick">＋ 質問</button>
+        <button class="tab" data-tab="list" id="tabList">一覧</button>
+        <button class="tab gear" data-tab="settings" aria-label="設定">⚙</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- すばやく質問を足す -->
+    <section class="panel active" id="panel-quick">
+      <div class="card">
+        <textarea id="qInput" enterkeyhint="send" placeholder="聞かれた質問を入力"></textarea>
+        <div class="similar" id="similar"></div>
+        <div class="quick-meta">カテゴリ <select id="qCategory"></select> <span id="qAuto">自動</span></div>
+        <button class="btn primary big" id="qSave">保存</button>
+        <div class="who" id="who"></div>
+      </div>
+      <div class="card hidden" id="recentCard">
+        <h2>今回入力した質問</h2>
+        <div id="recent"></div>
+      </div>
+    </section>
+
+    <!-- 一覧 -->
+    <section class="panel" id="panel-list">
+      <div class="filters">
+        <div class="seg" id="statusFilter">
+          <button data-v="empty" class="on">未記入</button>
+          <button data-v="done">記入済</button>
+          <button data-v="all">すべて</button>
+        </div>
+        <select id="catFilter"></select>
+        <input type="text" id="search" placeholder="キーワードで探す">
+      </div>
+      <div class="count" id="count"></div>
+      <div id="list"></div>
+    </section>
+
+    <!-- 登録済みの質問を編集 -->
+    <section class="panel" id="panel-edit">
+      <div class="card">
+        <label class="field"><span class="label">質問</span><textarea id="eQuestion"></textarea></label>
+        <label class="field"><span class="label">回答</span>
+          <textarea id="eAnswer" placeholder="スタッフにそのまま送れる文で書いてください" style="min-height:120px"></textarea>
+          <div class="hint">空欄のままだと「未記入」のまま。ボットは回答がある質問だけを使います。</div>
+        </label>
+        <label class="field"><span class="label">カテゴリ</span>
+          <select id="eCategory"></select>
+          <input type="text" id="eNewCategory" class="hidden" placeholder="新しいカテゴリ名" style="margin-top:6px">
+        </label>
+        <div class="field"><span class="label">公開範囲</span><div class="seg" id="eScope"></div>
+          <div class="hint">「社員のみ」にすると、アルバイト・パートには答えません</div></div>
+        <label class="field"><span class="label">店舗</span><select id="eStore"></select></label>
+        <label class="field"><span class="label">記入者</span><select id="eUpdatedBy"></select></label>
+        <div class="row-btns">
+          <button class="btn primary" id="eSave">更新する</button>
+          <button class="btn" id="eCancel">戻る</button>
+          <button class="btn danger" id="eDelete">削除</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 設定 -->
+    <section class="panel" id="panel-settings">
+      <div class="card">
+        <h2>この端末</h2>
+        <label class="field"><span class="label">店舗</span><select id="sStore"></select></label>
+        <label class="field"><span class="label">名前</span><select id="sName"></select></label>
+        <div class="hint" id="sEmptyHint"></div>
+        <button class="btn primary" id="sSave">保存</button>
+      </div>
+      <div class="card">
+        <h2>店舗・記入者のリスト（管理者のみ）</h2>
+        <div id="adminLocked">
+          <label class="field"><span class="label">管理者の合言葉</span><input type="password" id="adminCode" autocomplete="off"></label>
+          <button class="btn" id="adminOpen">開く</button>
+        </div>
+        <div id="adminEditor" class="hidden">
+          <span class="label">店舗</span>
+          <div id="storeRows"></div>
+          <button class="btn small" id="addStore">＋ 店舗を追加</button>
+          <span class="label" style="margin-top:16px">記入者</span>
+          <div id="memberRows"></div>
+          <button class="btn small" id="addMember">＋ 記入者を追加</button>
+          <div class="row-btns" style="margin-top:16px">
+            <button class="btn primary" id="adminSave">リストを保存</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+var NEW_OPTION = '__new__';
+var ALL_STORES = '全店';
+var state = { code: '', adminCode: '', data: null, editing: null, editScope: '全員', status: 'empty', catTouched: false, sending: false, recent: [] };
+
+// 質問の言葉からカテゴリを推測する(当たらなければ「その他」。あとから一覧で直せる)
+var CATEGORY_WORDS = {
+  '勤怠': ['遅刻', '欠勤', '休み', '早退', '出勤', '退勤', '打刻', 'タイムカード', '休憩', '体調'],
+  'シフト': ['シフト', '交代', '代わり', '希望休', '勤務表'],
+  'レジ・会計': ['レジ', '会計', 'お釣り', '釣り銭', '現金', 'カード', '電子マネー', 'ポイント', '領収書', '返金', '両替', 'クーポン', 'paypay', 'qr', '割引', '値引'],
+  '接客': ['接客', 'お客', '客', 'クレーム', '電話', '予約', '案内', '挨拶', '問い合わせ'],
+  '清掃': ['掃除', '清掃', 'ゴミ', 'ごみ', 'トイレ', '洗い物', '片付け', '消毒'],
+  '仕込み・調理': ['仕込み', '調理', '料理', 'レシピ', '盛り付け', '味', '冷蔵', '冷凍', '賞味', '消費期限', '食材', '揚げ', '焼き'],
+  '発注・在庫': ['発注', '在庫', '納品', '仕入', '補充', '欠品', '業者'],
+  '設備・トラブル': ['故障', '壊れ', '機械', 'エアコン', '電気', '停電', '水漏れ', '鍵', '警備', 'セキュリティ', 'wifi', 'プリンタ', '冷房', '暖房', '火災', 'ブレーカー', '詰まり'],
+  '給与・手続き': ['給料', '給与', '振込', '交通費', '有給', '年末調整', '書類', '保険', 'マイナンバー', '源泉', '手続き', '口座'],
+  '制服・身だしなみ': ['制服', 'エプロン', '髪', 'ネイル', '靴', '身だしなみ', '名札', '服装', 'ピアス', '帽子']
+};
+function guessCategory(text) {
+  var t = String(text).toLowerCase(), best = 'その他', bestScore = 0;
+  Object.keys(CATEGORY_WORDS).forEach(function (cat) {
+    var score = 0;
+    CATEGORY_WORDS[cat].forEach(function (w) { if (t.indexOf(w) >= 0) score += w.length; });
+    if (score > bestScore) { bestScore = score; best = cat; }
+  });
+  return best;
+}
+
+function $(id) { return document.getElementById(id); }
+function store(k, v) {
+  try {
+    if (v === undefined) return localStorage.getItem(k) || '';
+    if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v);
+  } catch (e) { return ''; }
+}
+function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+function toast(msg, isErr) {
+  var t = $('toast');
+  t.textContent = msg;
+  t.className = 'show' + (isErr ? ' err' : '');
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(function () { t.className = ''; }, isErr ? 5000 : 1800);
+}
+
+// GASのURLで開いたときは google.script.run、GitHub Pagesで開いたときはWeb通信でGASを呼ぶ。
+// GitHub Pages版はGoogleのログイン状態に左右されない(Cookieを送らない)ので、どのスマホでも開ける。
+var API_URL = 'https://script.google.com/macros/s/AKfycbxhPsy5O_WpiDmVU2RpLXbEyOFmFpGuyLzTYrFMrLT3iFLNmj_9gvq8KiJIOomPlg3y/exec?api=editor';
+
+function call(fn, args, onOk, onErr) {
+  var fail = function (msg) {
+    if (onErr && onErr(msg) === true) return;
+    if (msg.indexOf('合言葉が違います') >= 0 && msg.indexOf('管理者') < 0) showGate(msg);
+    else toast(msg, true);
+  };
+  if (window.google && google.script && google.script.run) {
+    google.script.run
+      .withSuccessHandler(onOk)
+      .withFailureHandler(function (e) { fail((e && e.message) || String(e)); })[fn].apply(null, args);
+    return;
+  }
+  // text/plainで送ると事前確認(CORSプリフライト)が不要になり、GASでも受け取れる
+  fetch(API_URL, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn: fn, args: args }) })
+    .then(function (res) { return res.json(); })
+    .then(function (out) { if (out.ok) onOk(out.result); else fail(out.error); })
+    .catch(function () { fail('通信できませんでした。電波の良いところでもう一度試してください。'); });
+}
+
+// ---------- 画面の切り替え ----------
+function showScreen(id) {
+  ['gate', 'setup', 'app'].forEach(function (s) { $(s).classList.toggle('hidden', s !== id); });
+}
+function showGate(msg) {
+  showScreen('gate');
+  if (msg) toast(msg, true);
+}
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(function (t) { t.classList.toggle('active', t.getAttribute('data-tab') === name || (name === 'edit' && t.getAttribute('data-tab') === 'list')); });
+  ['quick', 'list', 'edit', 'settings'].forEach(function (p) { $('panel-' + p).classList.toggle('active', p === name); });
+  window.scrollTo(0, 0);
+  if (name === 'list') refresh();
+  if (name === 'settings') renderDeviceSettings();
+}
+document.querySelectorAll('.tab').forEach(function (t) {
+  t.onclick = function () { switchTab(t.getAttribute('data-tab')); };
+});
+
+// ---------- 合言葉 ----------
+$('gateBtn').onclick = function () {
+  var code = $('gateCode').value.trim();
+  if (!code) return;
+  $('gateBtn').disabled = true;
+  call('getEditorData', [code], function (data) {
+    $('gateBtn').disabled = false;
+    state.code = code;
+    store('faqEditorCode', code);
+    start(data);
+  }, function () { $('gateBtn').disabled = false; });
+};
+$('gateCode').onkeydown = function (e) { if (e.key === 'Enter') $('gateBtn').click(); };
+
+function start(data) {
+  state.data = data;
+  var hasChoices = data.stores.length || data.members.length;
+  if (!store('faqDeviceDone') && hasChoices) {
+    fillStoreSelect($('setupStore'), deviceStore());
+    fillNameSelect($('setupName'), $('setupStore').value, deviceName());
+    showScreen('setup');
+    return;
+  }
+  showScreen('app');
+  renderAll();
+  $('qInput').focus();
+  sendQueue();
+}
+
+// ---------- この端末の店舗・名前 ----------
+function deviceStore() { return store('faqDeviceStore'); }
+function deviceName() { return store('faqDeviceName'); }
+
+function fillStoreSelect(sel, selected) {
+  var stores = state.data.stores;
+  sel.innerHTML = '<option value="">(未選択)</option>' + stores.map(function (s) { return '<option>' + esc(s) + '</option>'; }).join('');
+  sel.value = stores.indexOf(selected) >= 0 ? selected : (stores.length === 1 ? stores[0] : '');
+}
+function fillNameSelect(sel, storeName, selected) {
+  var names = state.data.members.filter(function (m) { return !storeName || !m.store || m.store === storeName; }).map(function (m) { return m.name; });
+  sel.innerHTML = '<option value="">(未選択)</option>' + names.map(function (n) { return '<option>' + esc(n) + '</option>'; }).join('');
+  sel.value = names.indexOf(selected) >= 0 ? selected : '';
+}
+$('setupStore').onchange = function () { fillNameSelect($('setupName'), this.value, $('setupName').value); };
+$('sStore').onchange = function () { fillNameSelect($('sName'), this.value, $('sName').value); };
+
+function saveDevice(storeName, name) {
+  store('faqDeviceStore', storeName);
+  store('faqDeviceName', name);
+  store('faqDeviceDone', '1');
+}
+$('setupBtn').onclick = function () {
+  saveDevice($('setupStore').value, $('setupName').value);
+  start(state.data);
+};
+$('setupSkip').onclick = function () {
+  store('faqDeviceDone', '1');
+  start(state.data);
+};
+
+function renderWho() {
+  var s = deviceStore(), n = deviceName();
+  $('who').innerHTML = '店舗: ' + esc(s || '未選択') + '　記入者: ' + esc(n || '未選択') + ' <button class="btn link" id="whoChange">変更</button>';
+  $('whoChange').onclick = function () { switchTab('settings'); };
+}
+
+function renderDeviceSettings() {
+  fillStoreSelect($('sStore'), deviceStore());
+  fillNameSelect($('sName'), $('sStore').value, deviceName());
+  $('sEmptyHint').textContent = (!state.data.stores.length && !state.data.members.length) ? '店舗・記入者がまだ登録されていません。下の「管理者のみ」から追加してください。' : '';
+  if (state.adminCode) openAdminEditor();
+}
+$('sSave').onclick = function () {
+  saveDevice($('sStore').value, $('sName').value);
+  renderWho();
+  toast('この端末の設定を保存しました');
+  switchTab('quick');
+};
+
+// ---------- 描画 ----------
+function renderAll() {
+  fillCategorySelect($('qCategory'), state.catTouched ? $('qCategory').value : guessCategory($('qInput').value), false);
+  var catF = $('catFilter').value;
+  $('catFilter').innerHTML = '<option value="">すべてのカテゴリ</option>' + state.data.categories.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('');
+  $('catFilter').value = catF;
+  renderWho();
+  renderAlert();
+  renderList();
+  renderRecent();
+}
+
+function fillCategorySelect(sel, selected, withNew) {
+  var cats = state.data.categories.slice();
+  if (selected && selected !== NEW_OPTION && cats.indexOf(selected) < 0) cats.push(selected);
+  sel.innerHTML = cats.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('') +
+    (withNew ? '<option value="' + NEW_OPTION + '">＋ 新しいカテゴリ</option>' : '');
+  sel.value = selected || 'その他';
+}
+
+function emptyCount() { return state.data.items.filter(function (it) { return !it.answer; }).length; }
+
+function renderAlert() {
+  var n = emptyCount();
+  $('alert').textContent = '⚠ 回答が未記入の質問が ' + n + ' 件あります（タップで確認）';
+  $('alert').classList.toggle('show', n > 0);
+  $('tabList').textContent = '一覧' + (n ? '（未記入 ' + n + '）' : '');
+}
+$('alert').onclick = function () { setStatus('empty'); switchTab('list'); };
+
+function refresh() {
+  call('getEditorData', [state.code], function (data) { state.data = data; renderAll(); });
+}
+
+// ---------- すばやく質問を足す ----------
+$('qInput').oninput = function () {
+  if (!state.catTouched) $('qCategory').value = guessCategory(this.value);
+  $('qAuto').textContent = state.catTouched ? '' : '自動';
+  checkSimilar();
+};
+$('qCategory').onchange = function () { state.catTouched = true; $('qAuto').textContent = ''; };
+$('qInput').onkeydown = function (e) {
+  // 日本語入力の変換確定のEnterでは保存しない
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
+    e.preventDefault();
+    quickSave();
+  }
+};
+// 保存ボタンを押してもキーボードを閉じない(続けて打てるように)
+$('qSave').onpointerdown = function (e) { e.preventDefault(); };
+$('qSave').onclick = quickSave;
+
+function quickSave() {
+  var q = $('qInput').value.trim();
+  if (!q) { toast('質問を入力してください', true); $('qInput').focus(); return; }
+  var item = { question: q, category: $('qCategory').value, store: deviceStore() || ALL_STORES, updatedBy: deviceName(), scope: '全員', answer: '' };
+  var queue = loadQueue();
+  queue.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), item: item });
+  saveQueue(queue);
+  state.recent.unshift({ id: queue[queue.length - 1].id, question: q, status: 'sending' });
+  $('qInput').value = '';
+  state.catTouched = false;
+  $('qCategory').value = 'その他';
+  $('qAuto').textContent = '自動';
+  checkSimilar();
+  $('qInput').focus();
+  renderRecent();
+  sendQueue();
+}
+
+// 送信待ちの質問は端末に保存しておき、電波が戻ったら自動で送る
+function loadQueue() { try { return JSON.parse(store('faqQueue') || '[]'); } catch (e) { return []; } }
+function saveQueue(q) { store('faqQueue', JSON.stringify(q)); }
+
+function sendQueue() {
+  if (state.sending || !state.code) return;
+  var queue = loadQueue();
+  if (!queue.length) return;
+  var job = queue[0];
+  state.sending = true;
+  setRecentStatus(job.id, 'sending', job.item.question);
+  call('addQuestion', [state.code, job.item], function (res) {
+    state.sending = false;
+    saveQueue(loadQueue().filter(function (j) { return j.id !== job.id; }));
+    var it = job.item;
+    state.data.items.push({ row: res.row, category: it.category, question: it.question, answer: '', scope: it.scope, store: it.store, updatedBy: it.updatedBy, updatedAt: '' });
+    setRecentStatus(job.id, 'ok');
+    renderAlert();
+    sendQueue();
+  }, function (msg) {
+    state.sending = false;
+    setRecentStatus(job.id, 'ng');
+    if (msg.indexOf('合言葉') >= 0) return false;
+    // 通信エラーなどはしばらくしてから自動で送り直す
+    clearTimeout(sendQueue.timer);
+    sendQueue.timer = setTimeout(sendQueue, 15000);
+    return true;
+  });
+}
+window.addEventListener('online', sendQueue);
+
+function setRecentStatus(id, status, question) {
+  var r = state.recent.filter(function (x) { return x.id === id; })[0];
+  if (!r) { r = { id: id, question: question || '', status: status }; state.recent.unshift(r); }
+  r.status = status;
+  renderRecent();
+}
+
+function renderRecent() {
+  var list = state.recent.slice(0, 10);
+  $('recentCard').classList.toggle('hidden', !list.length);
+  var label = { sending: ['送信中…', ''], ok: ['✓ 保存', 'ok'], ng: ['未送信・自動で再送', 'ng'] };
+  $('recent').innerHTML = list.map(function (r) {
+    var l = label[r.status];
+    return '<div class="recent-item"><span class="st ' + l[1] + '">' + l[0] + '</span><span>' + esc(r.question) + '</span></div>';
+  }).join('');
+}
+
+// 似た質問がすでにあれば知らせる(重複登録の防止。保存はそのままできる)
+function norm(s) { return String(s).toLowerCase().replace(/[\s　、。・,.!！?？「」()（）]/g, ''); }
+function bigrams(s) { var out = {}; for (var i = 0; i < s.length - 1; i++) out[s.substr(i, 2)] = 1; return out; }
+function findSimilar(text, exceptRow) {
+  var q = norm(text);
+  if (!state.data || q.length < 3) return [];
+  var qb = bigrams(q), qn = Object.keys(qb).length;
+  return state.data.items.filter(function (it) {
+    if (it.row === exceptRow) return false;
+    var t = norm(it.question);
+    if (t.indexOf(q) >= 0 || q.indexOf(t) >= 0) return true;
+    var tb = bigrams(t), common = 0, tn = 0;
+    for (var k in tb) { tn++; if (qb[k]) common++; }
+    return common / Math.max(1, Math.min(qn, tn)) >= 0.5;
+  }).slice(0, 3);
+}
+function checkSimilar() {
+  var hits = findSimilar($('qInput').value, null);
+  $('similar').innerHTML = hits.length ? '似た質問があります: ' + hits.map(function (h) { return '「' + esc(h.question) + '」'; }).join(' ') : '';
+  $('similar').classList.toggle('show', hits.length > 0);
+}
+
+// ---------- 一覧 ----------
+function renderList() {
+  var cat = $('catFilter').value;
+  var kw = $('search').value.trim().toLowerCase();
+  var items = state.data.items.filter(function (it) {
+    if (state.status === 'empty' && it.answer) return false;
+    if (state.status === 'done' && !it.answer) return false;
+    if (cat && it.category !== cat) return false;
+    if (kw && (it.question + ' ' + it.answer + ' ' + it.category).toLowerCase().indexOf(kw) < 0) return false;
+    return true;
+  }).reverse();
+  $('count').textContent = items.length + ' 件';
+  if (!items.length) {
+    $('list').innerHTML = '<div class="empty-state">' + (state.status === 'empty' && !cat && !kw ? '🎉 未記入の質問はありません' : '該当する質問はありません') + '</div>';
+    return;
+  }
+  $('list').innerHTML = items.map(function (it) {
+    return '<div class="item' + (it.answer ? '' : ' empty') + '" data-row="' + it.row + '">' +
+      '<div class="chips"><span class="chip">' + esc(it.category || 'その他') + '</span>' +
+      '<span class="chip' + (it.scope === '社員のみ' ? ' staff' : '') + '">' + esc(it.scope) + '</span>' +
+      '<span class="chip">' + esc(it.store) + '</span></div>' +
+      '<div class="q">' + esc(it.question) + '</div>' +
+      (it.answer ? '<div class="a">' + esc(it.answer) + '</div>' : '<div class="a none">回答が未記入です</div>') +
+      '<div class="meta">' + esc(it.updatedBy || '') + (it.updatedAt ? '　' + esc(it.updatedAt) : '') + '</div></div>';
+  }).join('');
+}
+$('list').onclick = function (e) {
+  var card = e.target.closest('.item');
+  if (!card) return;
+  var row = Number(card.getAttribute('data-row'));
+  var it = state.data.items.filter(function (x) { return x.row === row; })[0];
+  if (it) startEdit(it);
+};
+function setStatus(v) {
+  state.status = v;
+  Array.prototype.forEach.call($('statusFilter').children, function (b) { b.classList.toggle('on', b.getAttribute('data-v') === v); });
+  renderList();
+}
+$('statusFilter').onclick = function (e) { var v = e.target.getAttribute('data-v'); if (v) setStatus(v); };
+$('catFilter').onchange = renderList;
+$('search').oninput = renderList;
+
+// ---------- 編集 ----------
+function startEdit(it) {
+  state.editing = it;
+  $('eQuestion').value = it.question;
+  $('eAnswer').value = it.answer;
+  fillCategorySelect($('eCategory'), it.category || 'その他', true);
+  $('eNewCategory').value = '';
+  $('eNewCategory').classList.add('hidden');
+  state.editScope = it.scope || '全員';
+  renderEditScope();
+  var stores = [ALL_STORES].concat(state.data.stores);
+  if (stores.indexOf(it.store) < 0) stores.push(it.store);
+  $('eStore').innerHTML = stores.map(function (s) { return '<option>' + esc(s) + '</option>'; }).join('');
+  $('eStore').value = it.store;
+  var names = state.data.members.map(function (m) { return m.name; });
+  if (it.updatedBy && names.indexOf(it.updatedBy) < 0) names.unshift(it.updatedBy);
+  $('eUpdatedBy').innerHTML = '<option value="">(未選択)</option>' + names.map(function (n) { return '<option>' + esc(n) + '</option>'; }).join('');
+  $('eUpdatedBy').value = it.updatedBy || deviceName() || '';
+  switchTab('edit');
+}
+function renderEditScope() {
+  $('eScope').innerHTML = state.data.scopes.map(function (s) {
+    return '<button type="button" data-v="' + esc(s) + '" class="' + (state.editScope === s ? 'on' : '') + '">' + esc(s) + '</button>';
+  }).join('');
+}
+$('eScope').onclick = function (e) { var v = e.target.getAttribute('data-v'); if (v) { state.editScope = v; renderEditScope(); } };
+$('eCategory').onchange = function () {
+  $('eNewCategory').classList.toggle('hidden', this.value !== NEW_OPTION);
+  if (this.value === NEW_OPTION) $('eNewCategory').focus();
+};
+
+$('eSave').onclick = function () {
+  var it = state.editing;
+  var q = $('eQuestion').value.trim();
+  if (!q) { toast('質問を入力してください', true); return; }
+  var cat = $('eCategory').value === NEW_OPTION ? $('eNewCategory').value.trim() : $('eCategory').value;
+  var item = { row: it.row, originalQuestion: it.question, question: q, answer: $('eAnswer').value.trim(), category: cat, scope: state.editScope, store: $('eStore').value, updatedBy: $('eUpdatedBy').value };
+  $('eSave').disabled = true;
+  call('saveFaq', [state.code, item], function (data) {
+    $('eSave').disabled = false;
+    state.data = data;
+    renderAll();
+    toast('更新しました');
+    switchTab('list');
+  }, function () { $('eSave').disabled = false; });
+};
+$('eCancel').onclick = function () { switchTab('list'); };
+$('eDelete').onclick = function () {
+  var it = state.editing;
+  if (!confirm('「' + it.question + '」を台帳から削除しますか？')) return;
+  $('eDelete').disabled = true;
+  call('deleteFaq', [state.code, it.row, it.question], function (data) {
+    $('eDelete').disabled = false;
+    state.data = data;
+    renderAll();
+    toast('削除しました');
+    switchTab('list');
+  }, function () { $('eDelete').disabled = false; });
+};
+
+// ---------- 店舗・記入者のリスト(管理者のみ) ----------
+$('adminOpen').onclick = function () {
+  var code = $('adminCode').value.trim();
+  if (!code) return;
+  call('checkAdmin', [code], function (settings) {
+    state.adminCode = code;
+    store('faqAdminCode', code);
+    state.data.stores = settings.stores;
+    state.data.members = settings.members;
+    openAdminEditor();
+  });
+};
+function openAdminEditor() {
+  $('adminLocked').classList.add('hidden');
+  $('adminEditor').classList.remove('hidden');
+  $('storeRows').innerHTML = '';
+  $('memberRows').innerHTML = '';
+  state.data.stores.forEach(function (s) { addStoreRow(s); });
+  state.data.members.forEach(function (m) { addMemberRow(m.name, m.store); });
+  if (!state.data.stores.length) addStoreRow('');
+  if (!state.data.members.length) addMemberRow('', '');
+}
+function removeBtn() { return '<button class="btn small" type="button" data-remove>✕</button>'; }
+function addStoreRow(value) {
+  var div = document.createElement('div');
+  div.className = 'list-row';
+  div.innerHTML = '<input type="text" placeholder="店舗名" value="' + esc(value) + '">' + removeBtn();
+  $('storeRows').appendChild(div);
+  return div;
+}
+function adminStoreNames() {
+  return Array.prototype.map.call($('storeRows').querySelectorAll('input'), function (i) { return i.value.trim(); }).filter(Boolean);
+}
+function addMemberRow(name, storeName) {
+  var div = document.createElement('div');
+  div.className = 'list-row';
+  var opts = ['<option value="">全店</option>'].concat(adminStoreNames().map(function (s) { return '<option>' + esc(s) + '</option>'; }));
+  div.innerHTML = '<input type="text" placeholder="名前" value="' + esc(name) + '"><select>' + opts.join('') + '</select>' + removeBtn();
+  div.querySelector('select').value = storeName || '';
+  $('memberRows').appendChild(div);
+  return div;
+}
+$('adminEditor').onclick = function (e) {
+  if (e.target.hasAttribute('data-remove')) { e.target.parentNode.remove(); refreshMemberStoreOptions(); }
+};
+// 店舗名を書き換えたら、記入者の店舗の選択肢も合わせる
+function refreshMemberStoreOptions() {
+  var stores = adminStoreNames();
+  Array.prototype.forEach.call($('memberRows').querySelectorAll('select'), function (sel) {
+    var cur = sel.value;
+    sel.innerHTML = '<option value="">全店</option>' + stores.map(function (s) { return '<option>' + esc(s) + '</option>'; }).join('');
+    sel.value = stores.indexOf(cur) >= 0 ? cur : '';
+  });
+}
+$('storeRows').addEventListener('change', refreshMemberStoreOptions);
+$('addStore').onclick = function () { addStoreRow('').querySelector('input').focus(); };
+$('addMember').onclick = function () { addMemberRow('', '').querySelector('input').focus(); };
+$('adminSave').onclick = function () {
+  var settings = {
+    stores: adminStoreNames(),
+    members: Array.prototype.map.call($('memberRows').children, function (row) {
+      return { name: row.querySelector('input').value.trim(), store: row.querySelector('select').value };
+    })
+  };
+  $('adminSave').disabled = true;
+  call('saveSettings', [state.adminCode, settings], function (saved) {
+    $('adminSave').disabled = false;
+    state.data.stores = saved.stores;
+    state.data.members = saved.members;
+    renderDeviceSettings();
+    toast('リストを保存しました');
+  }, function (msg) {
+    $('adminSave').disabled = false;
+    if (msg.indexOf('管理者') >= 0) {
+      state.adminCode = '';
+      store('faqAdminCode', null);
+      $('adminLocked').classList.remove('hidden');
+      $('adminEditor').classList.add('hidden');
+    }
+  });
+};
+
+// ---------- 起動 ----------
+state.code = store('faqEditorCode');
+state.adminCode = store('faqAdminCode');
+if (state.code) {
+  call('getEditorData', [state.code], start);
+} else {
+  showGate();
+}
+</script>
+</body>
+</html>

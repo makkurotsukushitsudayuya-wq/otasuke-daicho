@@ -726,20 +726,22 @@ function addStoreRow(value) {
 function listStoreNames() {
   return Array.prototype.map.call($('storeRows').querySelectorAll('input'), function (i) { return i.value.trim(); }).filter(Boolean);
 }
+// 記入者の所属は「全店」「本部」と、登録した店舗から選ぶ
+function memberAffiliations() { return [state.data.hqStore || '本部'].concat(listStoreNames()); }
 function addMemberRow(name, storeName) {
   var div = document.createElement('div');
   div.className = 'list-row';
   div.innerHTML = '<input type="text" placeholder="名前" value="' + esc(name) + '"><select>' +
-    '<option value="">全店</option>' + opts(listStoreNames(), storeName) + '</select>' + removeBtn();
+    '<option value="">全店</option>' + opts(memberAffiliations(), storeName) + '</select>' + removeBtn();
   $('memberRows').appendChild(div);
   return div;
 }
 function refreshMemberStoreOptions() {
-  var stores = listStoreNames();
+  var choices = memberAffiliations();
   $('memberRows').querySelectorAll('select').forEach(function (sel) {
     var cur = sel.value;
-    sel.innerHTML = '<option value="">全店</option>' + opts(stores, cur);
-    if (stores.indexOf(cur) < 0) sel.value = '';
+    sel.innerHTML = '<option value="">全店</option>' + opts(choices, cur);
+    if (choices.indexOf(cur) < 0) sel.value = '';
   });
 }
 $('panel-lists').addEventListener('click', function (e) {

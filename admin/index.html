@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>お助けボット 管理</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --text: #1f2328; --muted: #6a737d; --line: #d9dde3;
+    --accent: #2563eb; --accent-text: #ffffff; --accent-soft: #e8efff; --warn-bg: #fff4e5; --warn: #b45309;
+    --danger: #c62828; --danger-soft: #fdecec; --ok: #2e7d32; --chip: #eef2f7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16181c; --card: #1f2227; --text: #e8eaed; --muted: #9aa0a6; --line: #3a3f47;
+      --accent: #5b8def; --accent-text: #0b0d10; --accent-soft: #1d2a44; --warn-bg: #3a2a12; --warn: #f5b25a;
+      --danger: #ef6b6b; --danger-soft: #3a1d1d; --ok: #6cc070; --chip: #2a2e35;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif; font-size: 15px; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--card); border-bottom: 1px solid var(--line); }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 16px; }
+  .top { display: flex; align-items: center; gap: 8px; padding: 10px 0 0; }
+  h1 { font-size: 17px; margin: 0; flex: 1; }
+  h2 { font-size: 15px; margin: 0 0 10px; }
+  .stats { font-size: 13px; color: var(--muted); }
+  .stats b { color: var(--danger); }
+  .tabs { display: flex; margin-top: 6px; }
+  .tab { padding: 10px 16px; border: 0; border-bottom: 3px solid transparent; background: none; color: var(--muted); font-size: 15px; font-weight: 600; cursor: pointer; }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  main { padding: 12px 0 96px; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  input[type=text], input[type=password], select, textarea {
+    padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); font-size: 16px; font-family: inherit;
+  }
+  .btn { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--text); font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  .btn.danger { color: var(--danger); border-color: var(--danger); }
+  .btn.icon { padding: 6px 10px; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 12px; }
+  .hint { color: var(--muted); font-size: 12px; }
+
+  /* 絞り込み */
+  .toolbar { display: grid; gap: 8px; margin-bottom: 10px; }
+  .toolbar input[type=text] { width: 100%; }
+  .chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+  .fchip { flex: 0 0 auto; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--text); font-size: 13px; cursor: pointer; }
+  .fchip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
+  .fchip .n { opacity: .7; margin-left: 4px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .row select { flex: 1 1 140px; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; flex: 1 1 220px; }
+  .seg button { flex: 1; padding: 8px; border: 0; background: var(--card); color: var(--text); font-size: 14px; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button.on { background: var(--accent); color: var(--accent-text); font-weight: 600; }
+  .listhead { display: flex; align-items: center; gap: 8px; margin: 4px 0 8px; font-size: 13px; color: var(--muted); }
+  .listhead label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+
+  /* 質問カード(その場編集) */
+  .q-card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+  .q-card.empty { border-left: 4px solid var(--danger); }
+  .q-card.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); background: var(--accent-soft); }
+  .q-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 6px; }
+  .q-meta input[type=checkbox] { width: 20px; height: 20px; margin: 0 4px 0 0; }
+  .q-meta select { padding: 4px 6px; font-size: 13px; max-width: 150px; }
+  .q-meta .sp { flex: 1; }
+  .q-status { font-size: 12px; color: var(--muted); min-width: 52px; text-align: right; }
+  .q-status.ok { color: var(--ok); }
+  .q-status.ng { color: var(--danger); cursor: pointer; }
+  .q-card textarea { width: 100%; resize: none; overflow: hidden; min-height: 38px; line-height: 1.5; border-color: transparent; background: transparent; padding: 6px 8px; }
+  .q-card textarea:hover { border-color: var(--line); }
+  .q-card textarea:focus { border-color: var(--accent); background: var(--card); outline: none; }
+  .q-card .tq { font-weight: 600; }
+  .q-card .ta { font-size: 14px; }
+  .q-card.empty .ta { background: var(--danger-soft); }
+  .q-foot { font-size: 11px; color: var(--muted); padding: 0 8px; }
+  .more { display: block; margin: 12px auto; }
+  .empty-state { text-align: center; color: var(--muted); padding: 32px 0; }
+
+  /* まとめて操作 */
+  #bulk { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--card); border-top: 1px solid var(--line); box-shadow: 0 -4px 12px rgba(0,0,0,.08); transform: translateY(110%); transition: transform .15s; }
+  #bulk.show { transform: none; }
+  #bulk .wrap { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 16px; }
+  #bulk .count { font-weight: 600; margin-right: 4px; }
+  #bulk select { padding: 6px 8px; font-size: 14px; }
+
+  /* 店舗・記入者 */
+  .list-row { display: flex; gap: 6px; margin-bottom: 6px; }
+  .list-row input { flex: 1 1 auto; min-width: 0; }
+  .list-row select { flex: 0 0 38%; }
+
+  #toast { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); background: #222; color: #fff; padding: 10px 14px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: calc(100% - 32px); z-index: 10; display: flex; gap: 12px; align-items: center; }
+  #toast.show { opacity: 1; pointer-events: auto; }
+  #toast.err { background: var(--danger); }
+  #toast button { background: none; border: 0; color: #8ab4ff; font-weight: 700; font-size: 14px; cursor: pointer; padding: 0; }
+  .screen { max-width: 420px; margin: 48px auto; padding: 0 16px; }
+  .screen input { width: 100%; margin: 8px 0 12px; }
+  .screen .btn { width: 100%; padding: 12px; font-size: 16px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div id="gate" class="screen hidden">
+  <div class="card">
+    <h1>お助けボット 管理</h1>
+    <input type="password" id="gateCode" placeholder="管理者の合言葉" autocomplete="off">
+    <button class="btn primary" id="gateBtn">開く</button>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+  <header>
+    <div class="wrap">
+      <div class="top">
+        <h1>お助けボット 管理</h1>
+        <span class="stats" id="stats"></span>
+        <button class="btn icon" id="reload" title="最新を読み込む">⟳</button>
+      </div>
+      <div class="tabs">
+        <button class="tab active" data-tab="questions">質問</button>
+        <button class="tab" data-tab="lists">店舗・記入者</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="panel active" id="panel-questions">
+      <div class="toolbar">
+        <input type="text" id="search" placeholder="質問・回答をキーワードで探す">
+        <div class="chips" id="storeChips"></div>
+        <div class="row">
+          <div class="seg" id="statusSeg">
+            <button data-v="all" class="on">すべて</button>
+            <button data-v="empty">未記入</button>
+            <button data-v="done">記入済</button>
+          </div>
+          <select id="catFilter"></select>
+          <select id="sortSel">
+            <option value="new">追加が新しい順</option>
+            <option value="old">追加が古い順</option>
+            <option value="updated">更新が新しい順</option>
+            <option value="store">店舗順</option>
+            <option value="category">カテゴリ順</option>
+            <option value="emptyFirst">未記入を先に</option>
+          </select>
+        </div>
+      </div>
+      <div class="listhead">
+        <label><input type="checkbox" id="selAll"> 表示中をすべて選択</label>
+        <span id="count"></span>
+      </div>
+      <div id="list"></div>
+      <button class="btn more hidden" id="more">もっと表示</button>
+    </section>
+
+    <section class="panel" id="panel-lists">
+      <div class="card">
+        <h2>店舗</h2>
+        <div id="storeRows"></div>
+        <button class="btn" id="addStore">＋ 店舗を追加</button>
+      </div>
+      <div class="card">
+        <h2>記入者</h2>
+        <div id="memberRows"></div>
+        <button class="btn" id="addMember">＋ 記入者を追加</button>
+      </div>
+      <button class="btn primary" id="saveLists">リストを保存</button>
+      <p class="hint">店舗・記入者は、スタッフ用の台帳入力アプリで選べるようになります。</p>
+    </section>
+  </main>
+</div>
+
+<div id="bulk">
+  <div class="wrap">
+    <span class="count" id="bulkCount"></span>
+    <select id="bulkStore"></select>
+    <select id="bulkCat"></select>
+    <select id="bulkScope"><option value="">公開範囲を変更…</option><option>全員</option><option>社員のみ</option></select>
+    <button class="btn danger" id="bulkDelete">削除</button>
+    <button class="btn" id="bulkClear">選択を解除</button>
+  </div>
+</div>
+
+<div id="toast"><span id="toastMsg"></span><button id="toastUndo" class="hidden">元に戻す</button></div>
+
+<script>
+var API_URL = 'https://script.google.com/macros/s/AKfycbxhPsy5O_WpiDmVU2RpLXbEyOFmFpGuyLzTYrFMrLT3iFLNmj_9gvq8KiJIOomPlg3y/exec?api=editor';
+var PAGE_SIZE = 60;
+var ALL_STORES = '全店';
+var state = {
+  code: '', data: null, selected: {}, shown: PAGE_SIZE,
+  filter: { store: '', status: 'all', cat: '', q: '', sort: 'new' },
+  saveTimers: {}, saving: 0
+};
+
+function $(id) { return document.getElementById(id); }
+function store(k, v) {
+  try {
+    if (v === undefined) return localStorage.getItem(k) || '';
+    if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v);
+  } catch (e) { return ''; }
+}
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function opts(values, selected, placeholder) {
+  return (placeholder ? '<option value="">' + esc(placeholder) + '</option>' : '') +
+    values.map(function (v) { return '<option' + (v === selected ? ' selected' : '') + '>' + esc(v) + '</option>'; }).join('');
+}
+
+function toast(msg, isErr, undo) {
+  $('toastMsg').textContent = msg;
+  $('toast').className = 'show' + (isErr ? ' err' : '');
+  $('toastUndo').classList.toggle('hidden', !undo);
+  $('toastUndo').onclick = function () { if (undo) undo(); $('toast').className = ''; };
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(function () { $('toast').className = ''; }, undo ? 6000 : (isErr ? 5000 : 1800));
+}
+
+// GASはときどき応答が途切れるので、通信の失敗は自動で2回までやり直す
+function call(fn, args, onOk, onErr) {
+  var fail = function (msg) {
+    if (onErr && onErr(msg) === true) return;
+    if (msg.indexOf('管理者の合言葉が違います') >= 0) { store('faqAdminCode', null); showGate(msg); }
+    else toast(msg, true);
+  };
+  var attempt = function (triesLeft) {
+    fetch(API_URL, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn: fn, args: args }) })
+      .then(function (res) {
+        return res.text().then(function (text) {
+          try { return JSON.parse(text); } catch (e) { throw new Error('HTTP ' + res.status); }
+        });
+      })
+      .then(function (out) { if (out.ok) onOk(out.result); else fail(out.error); })
+      .catch(function (err) {
+        if (triesLeft > 0) { setTimeout(function () { attempt(triesLeft - 1); }, 1500); return; }
+        fail('通信できませんでした。電波の良いところでもう一度試してください。(' + ((err && err.message) || err) + ')');
+      });
+  };
+  attempt(2);
+}
+
+// ---------- 合言葉・読み込み ----------
+function showGate(msg) {
+  $('app').classList.add('hidden');
+  $('gate').classList.remove('hidden');
+  if (msg) toast(msg, true);
+}
+$('gateBtn').onclick = function () {
+  var code = $('gateCode').value.trim();
+  if (!code) return;
+  $('gateBtn').disabled = true;
+  $('gateBtn').textContent = '確認中…（少しかかります）';
+  var done = function () { $('gateBtn').disabled = false; $('gateBtn').textContent = '開く'; };
+  call('adminGetData', [code], function (data) {
+    done();
+    state.code = code;
+    store('faqAdminCode', code);
+    start(data);
+  }, done);
+};
+$('gateCode').onkeydown = function (e) { if (e.key === 'Enter') $('gateBtn').click(); };
+
+function setData(data) {
+  state.data = data;
+  store('faqAdminCache', JSON.stringify(data));
+}
+function start(data) {
+  setData(data);
+  $('gate').classList.add('hidden');
+  $('app').classList.remove('hidden');
+  renderAll();
+}
+function reload() {
+  if (state.saving) { toast('保存中です。少し待ってから読み込み直してください'); return; }
+  $('reload').disabled = true;
+  call('adminGetData', [state.code], function (data) {
+    $('reload').disabled = false;
+    setData(data);
+    renderAll();
+  }, function () { $('reload').disabled = false; });
+}
+$('reload').onclick = reload;
+
+// ---------- タブ ----------
+document.querySelectorAll('.tab').forEach(function (t) {
+  t.onclick = function () {
+    var name = t.getAttribute('data-tab');
+    document.querySelectorAll('.tab').forEach(function (x) { x.classList.toggle('active', x === t); });
+    $('panel-questions').classList.toggle('active', name === 'questions');
+    $('panel-lists').classList.toggle('active', name === 'lists');
+    if (name === 'lists') renderLists();
+    renderBulk();
+  };
+});
+
+// ---------- 描画 ----------
+function allStores() {
+  var stores = [ALL_STORES].concat(state.data.stores);
+  state.data.items.forEach(function (it) { if (stores.indexOf(it.store) < 0) stores.push(it.store); });
+  return stores;
+}
+function allCategories() {
+  var cats = state.data.categories.slice();
+  state.data.items.forEach(function (it) { if (it.category && cats.indexOf(it.category) < 0) cats.push(it.category); });
+  return cats;
+}
+
+function renderAll() {
+  renderStats();
+  renderFilters();
+  renderList();
+  renderBulk();
+}
+
+function renderStats() {
+  var items = state.data.items;
+  var empty = items.filter(function (it) { return !it.answer; }).length;
+  $('stats').innerHTML = '全' + items.length + '件' + (empty ? '・未記入 <b>' + empty + '</b>件' : '');
+}
+
+function renderFilters() {
+  var items = state.data.items;
+  var counts = {};
+  items.forEach(function (it) { counts[it.store] = (counts[it.store] || 0) + 1; });
+  var chips = [{ v: '', label: 'すべての店舗', n: items.length }].concat(allStores().map(function (s) { return { v: s, label: s, n: counts[s] || 0 }; }));
+  $('storeChips').innerHTML = chips.map(function (c) {
+    return '<button class="fchip' + (state.filter.store === c.v ? ' on' : '') + '" data-v="' + esc(c.v) + '">' + esc(c.label) + '<span class="n">' + c.n + '</span></button>';
+  }).join('');
+  $('catFilter').innerHTML = opts(allCategories(), state.filter.cat, 'すべてのカテゴリ');
+  $('bulkStore').innerHTML = opts(allStores(), '', '店舗を変更…');
+  $('bulkCat').innerHTML = opts(allCategories(), '', 'カテゴリを変更…');
+}
+
+function filtered() {
+  var f = state.filter;
+  var kw = f.q.trim().toLowerCase();
+  var list = state.data.items.map(function (it, i) { it._i = i; return it; }).filter(function (it) {
+    if (f.store && it.store !== f.store) return false;
+    if (f.status === 'empty' && it.answer) return false;
+    if (f.status === 'done' && !it.answer) return false;
+    if (f.cat && it.category !== f.cat) return false;
+    if (kw && (it.question + ' ' + it.answer).toLowerCase().indexOf(kw) < 0) return false;
+    return true;
+  });
+  var by = {
+    new: function (a, b) { return b._i - a._i; },
+    old: function (a, b) { return a._i - b._i; },
+    updated: function (a, b) { return String(b.updatedAt).localeCompare(String(a.updatedAt)) || b._i - a._i; },
+    store: function (a, b) { return storeRank(a.store) - storeRank(b.store) || b._i - a._i; },
+    category: function (a, b) { return catRank(a.category) - catRank(b.category) || b._i - a._i; },
+    emptyFirst: function (a, b) { return (a.answer ? 1 : 0) - (b.answer ? 1 : 0) || b._i - a._i; }
+  }[f.sort];
+  return list.sort(by);
+}
+function storeRank(s) { var i = allStores().indexOf(s); return i < 0 ? 999 : i; }
+function catRank(c) { var i = allCategories().indexOf(c); return i < 0 ? 999 : i; }
+
+function renderList() {
+  var list = filtered();
+  var page = list.slice(0, state.shown);
+  $('count').textContent = list.length + ' 件';
+  $('more').classList.toggle('hidden', list.length <= state.shown);
+  if (!list.length) {
+    $('list').innerHTML = '<div class="empty-state">該当する質問はありません</div>';
+  } else {
+    var stores = allStores(), cats = allCategories();
+    $('list').innerHTML = page.map(function (it) { return cardHtml(it, stores, cats); }).join('');
+    $('list').querySelectorAll('textarea').forEach(autoGrow);
+  }
+  $('selAll').checked = list.length > 0 && list.every(function (it) { return state.selected[it.id]; });
+}
+
+function cardHtml(it, stores, cats) {
+  var sel = !!state.selected[it.id];
+  return '<div class="q-card' + (it.answer ? '' : ' empty') + (sel ? ' sel' : '') + '" data-id="' + esc(it.id) + '">' +
+    '<div class="q-meta">' +
+      '<input type="checkbox" data-act="sel"' + (sel ? ' checked' : '') + ' aria-label="選択">' +
+      '<select data-f="store" aria-label="店舗">' + opts(stores, it.store) + '</select>' +
+      '<select data-f="category" aria-label="カテゴリ">' + opts(cats, it.category || 'その他') + '</select>' +
+      '<select data-f="scope" aria-label="公開範囲">' + opts(state.data.scopes, it.scope) + '</select>' +
+      '<span class="sp"></span><span class="q-status" data-status></span>' +
+      '<button class="btn icon" data-act="del" title="削除">🗑</button>' +
+    '</div>' +
+    '<textarea class="tq" data-f="question" rows="1" placeholder="質問">' + esc(it.question) + '</textarea>' +
+    '<textarea class="ta" data-f="answer" rows="1" placeholder="回答を入力（未記入）">' + esc(it.answer) + '</textarea>' +
+    '<div class="q-foot">' + esc(it.updatedBy || '') + (it.updatedAt ? '　' + esc(it.updatedAt) : '') + '</div>' +
+  '</div>';
+}
+
+function autoGrow(t) { t.style.height = 'auto'; t.style.height = (t.scrollHeight + 2) + 'px'; }
+
+// ---------- 絞り込み・並べ替え ----------
+$('storeChips').onclick = function (e) {
+  var b = e.target.closest('.fchip');
+  if (!b) return;
+  state.filter.store = b.getAttribute('data-v');
+  state.shown = PAGE_SIZE;
+  renderFilters(); renderList();
+};
+$('statusSeg').onclick = function (e) {
+  var v = e.target.getAttribute('data-v');
+  if (!v) return;
+  state.filter.status = v;
+  Array.prototype.forEach.call(this.children, function (b) { b.classList.toggle('on', b === e.target); });
+  state.shown = PAGE_SIZE;
+  renderList();
+};
+$('catFilter').onchange = function () { state.filter.cat = this.value; state.shown = PAGE_SIZE; renderList(); };
+$('sortSel').onchange = function () { state.filter.sort = this.value; renderList(); };
+$('search').oninput = function () {
+  state.filter.q = this.value;
+  clearTimeout(this.timer);
+  this.timer = setTimeout(function () { state.shown = PAGE_SIZE; renderList(); }, 200);
+};
+$('more').onclick = function () { state.shown += PAGE_SIZE; renderList(); };
+
+// ---------- その場編集(自動保存) ----------
+function findItem(id) { return state.data.items.filter(function (x) { return x.id === id; })[0]; }
+function cardOf(id) { return $('list').querySelector('.q-card[data-id="' + CSS.escape(id) + '"]'); }
+function setStatus(id, cls, text) {
+  var c = cardOf(id);
+  if (!c) return;
+  var s = c.querySelector('[data-status]');
+  s.className = 'q-status ' + cls;
+  s.textContent = text;
+}
+
+$('list').addEventListener('input', function (e) {
+  var t = e.target;
+  if (t.tagName !== 'TEXTAREA') return;
+  autoGrow(t);
+  var card = t.closest('.q-card');
+  var id = card.getAttribute('data-id');
+  var f = t.getAttribute('data-f');
+  if (f === 'answer') card.classList.toggle('empty', !t.value.trim());
+  queueSave(id, f, t.value, 900);
+});
+$('list').addEventListener('change', function (e) {
+  var t = e.target;
+  var card = t.closest('.q-card');
+  if (!card) return;
+  var id = card.getAttribute('data-id');
+  if (t.getAttribute('data-act') === 'sel') { toggleSelect(id, t.checked); return; }
+  if (t.tagName === 'SELECT') queueSave(id, t.getAttribute('data-f'), t.value, 0);
+});
+// 入力欄から離れたら、待たずにすぐ保存する
+$('list').addEventListener('focusout', function (e) {
+  if (e.target.tagName !== 'TEXTAREA') return;
+  var id = e.target.closest('.q-card').getAttribute('data-id');
+  flushSave(id);
+});
+$('list').addEventListener('click', function (e) {
+  var card = e.target.closest('.q-card');
+  if (!card) return;
+  var id = card.getAttribute('data-id');
+  if (e.target.getAttribute('data-act') === 'del') deleteItems([id]);
+  if (e.target.classList.contains('ng')) flushSave(id, true);
+});
+
+// 質問ごとに、変更された項目をまとめて送る
+var pending = {};
+function queueSave(id, field, value, delay) {
+  pending[id] = pending[id] || {};
+  pending[id][field] = field === 'question' || field === 'answer' ? value.trim() : value;
+  var it = findItem(id);
+  if (it) it[field] = pending[id][field];
+  setStatus(id, '', '編集中…');
+  clearTimeout(state.saveTimers[id]);
+  state.saveTimers[id] = setTimeout(function () { flushSave(id); }, delay);
+}
+function flushSave(id, retry) {
+  clearTimeout(state.saveTimers[id]);
+  var fields = pending[id];
+  if (!fields) return;
+  if ('question' in fields && !fields.question) { setStatus(id, 'ng', '質問が空です'); return; }
+  delete pending[id];
+  state.saving++;
+  setStatus(id, '', '保存中…');
+  call('adminUpdate', [state.code, [id], fields], function (updated) {
+    state.saving--;
+    var it = findItem(id);
+    if (it && updated[0]) Object.assign(it, updated[0]);
+    setData(state.data);
+    setStatus(id, 'ok', '✓ 保存');
+    var c = cardOf(id);
+    if (c && it) c.querySelector('.q-foot').textContent = (it.updatedBy || '') + (it.updatedAt ? '　' + it.updatedAt : '');
+    renderStats();
+  }, function (msg) {
+    state.saving--;
+    // 失敗した変更は戻しておき、タップで再送できるようにする
+    pending[id] = Object.assign(fields, pending[id] || {});
+    setStatus(id, 'ng', '⚠ 保存失敗（タップで再送）');
+    toast(msg, true);
+    return true;
+  });
+}
+window.addEventListener('beforeunload', function (e) {
+  if (state.saving || Object.keys(pending).length) { e.preventDefault(); e.returnValue = ''; }
+});
+
+// ---------- 選択・まとめて操作 ----------
+function toggleSelect(id, on) {
+  if (on) state.selected[id] = true; else delete state.selected[id];
+  var c = cardOf(id);
+  if (c) c.classList.toggle('sel', on);
+  renderBulk();
+}
+$('selAll').onchange = function () {
+  var on = this.checked;
+  filtered().forEach(function (it) { if (on) state.selected[it.id] = true; else delete state.selected[it.id]; });
+  renderList(); renderBulk();
+};
+function selectedIds() {
+  return Object.keys(state.selected).filter(function (id) { return findItem(id); });
+}
+function renderBulk() {
+  var n = selectedIds().length;
+  var onQuestions = $('panel-questions').classList.contains('active');
+  $('bulk').classList.toggle('show', n > 0 && onQuestions);
+  $('bulkCount').textContent = n + '件を選択中';
+}
+$('bulkClear').onclick = function () { state.selected = {}; renderList(); renderBulk(); };
+
+function bulkUpdate(field, value, label) {
+  var ids = selectedIds();
+  if (!ids.length || !value) return;
+  var fields = {};
+  fields[field] = value;
+  ids.forEach(function (id) { var it = findItem(id); if (it) it[field] = value; });
+  renderFilters(); renderList();
+  state.saving++;
+  call('adminUpdate', [state.code, ids, fields], function (updated) {
+    state.saving--;
+    updated.forEach(function (u) { var it = findItem(u.id); if (it) Object.assign(it, u); });
+    setData(state.data);
+    toast(ids.length + '件の' + label + 'を「' + value + '」にしました');
+  }, function (msg) {
+    state.saving--;
+    toast('まとめて変更できませんでした。⟳で読み込み直してください。' + msg, true);
+    return true;
+  });
+}
+$('bulkStore').onchange = function () { bulkUpdate('store', this.value, '店舗'); this.value = ''; };
+$('bulkCat').onchange = function () { bulkUpdate('category', this.value, 'カテゴリ'); this.value = ''; };
+$('bulkScope').onchange = function () { bulkUpdate('scope', this.value, '公開範囲'); this.value = ''; };
+$('bulkDelete').onclick = function () { deleteItems(selectedIds()); };
+
+// 削除はすぐ画面から消し、数秒間「元に戻す」を出してから実際に消す
+function deleteItems(ids) {
+  if (!ids.length) return;
+  var removed = state.data.items.filter(function (it) { return ids.indexOf(it.id) >= 0; });
+  state.data.items = state.data.items.filter(function (it) { return ids.indexOf(it.id) < 0; });
+  ids.forEach(function (id) { delete state.selected[id]; delete pending[id]; clearTimeout(state.saveTimers[id]); });
+  renderAll();
+  var cancelled = false;
+  var timer = setTimeout(function () {
+    if (cancelled) return;
+    state.saving++;
+    call('adminDelete', [state.code, ids], function () {
+      state.saving--;
+      setData(state.data);
+    }, function (msg) {
+      state.saving--;
+      state.data.items = state.data.items.concat(removed);
+      renderAll();
+      toast('削除できませんでした。' + msg, true);
+      return true;
+    });
+  }, 6000);
+  toast(ids.length + '件を削除しました', false, function () {
+    cancelled = true;
+    clearTimeout(timer);
+    state.data.items = state.data.items.concat(removed).sort(function (a, b) { return (a._i || 0) - (b._i || 0); });
+    renderAll();
+  });
+}
+
+// ---------- 店舗・記入者のリスト ----------
+function renderLists() {
+  $('storeRows').innerHTML = '';
+  $('memberRows').innerHTML = '';
+  state.data.stores.forEach(function (s) { addStoreRow(s); });
+  state.data.members.forEach(function (m) { addMemberRow(m.name, m.store); });
+  if (!state.data.stores.length) addStoreRow('');
+  if (!state.data.members.length) addMemberRow('', '');
+}
+function removeBtn() { return '<button class="btn icon" type="button" data-remove>✕</button>'; }
+function addStoreRow(value) {
+  var div = document.createElement('div');
+  div.className = 'list-row';
+  div.innerHTML = '<input type="text" placeholder="店舗名" value="' + esc(value) + '">' + removeBtn();
+  $('storeRows').appendChild(div);
+  return div;
+}
+function listStoreNames() {
+  return Array.prototype.map.call($('storeRows').querySelectorAll('input'), function (i) { return i.value.trim(); }).filter(Boolean);
+}
+function addMemberRow(name, storeName) {
+  var div = document.createElement('div');
+  div.className = 'list-row';
+  div.innerHTML = '<input type="text" placeholder="名前" value="' + esc(name) + '"><select>' +
+    '<option value="">全店</option>' + opts(listStoreNames(), storeName) + '</select>' + removeBtn();
+  $('memberRows').appendChild(div);
+  return div;
+}
+function refreshMemberStoreOptions() {
+  var stores = listStoreNames();
+  $('memberRows').querySelectorAll('select').forEach(function (sel) {
+    var cur = sel.value;
+    sel.innerHTML = '<option value="">全店</option>' + opts(stores, cur);
+    if (stores.indexOf(cur) < 0) sel.value = '';
+  });
+}
+$('panel-lists').addEventListener('click', function (e) {
+  if (e.target.hasAttribute('data-remove')) { e.target.parentNode.remove(); refreshMemberStoreOptions(); }
+});
+$('storeRows').addEventListener('change', refreshMemberStoreOptions);
+$('addStore').onclick = function () { addStoreRow('').querySelector('input').focus(); };
+$('addMember').onclick = function () { addMemberRow('', '').querySelector('input').focus(); };
+$('saveLists').onclick = function () {
+  var settings = {
+    stores: listStoreNames(),
+    members: Array.prototype.map.call($('memberRows').children, function (row) {
+      return { name: row.querySelector('input').value.trim(), store: row.querySelector('select').value };
+    })
+  };
+  $('saveLists').disabled = true;
+  call('saveSettings', [state.code, settings], function (saved) {
+    $('saveLists').disabled = false;
+    state.data.stores = saved.stores;
+    state.data.members = saved.members;
+    setData(state.data);
+    renderLists();
+    renderFilters();
+    toast('リストを保存しました');
+  }, function () { $('saveLists').disabled = false; });
+};
+
+// ---------- 起動 ----------
+state.code = store('faqAdminCode');
+var cached = null;
+try { cached = JSON.parse(store('faqAdminCache') || 'null'); } catch (e) {}
+if (state.code && cached) {
+  start(cached);
+  reload();
+} else if (state.code) {
+  call('adminGetData', [state.code], start);
+} else {
+  showGate();
+}
+</script>
+</body>
+</html>

@@ -79,9 +79,6 @@
   .a.none { color: var(--danger); font-weight: 600; }
   .meta { font-size: 12px; color: var(--muted); margin-top: 6px; }
   .empty-state { text-align: center; color: var(--muted); padding: 32px 0; }
-  .list-row { display: flex; gap: 6px; margin-bottom: 6px; }
-  .list-row input { flex: 1 1 auto; }
-  .list-row select { flex: 0 0 38%; }
   #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #222; color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: calc(100% - 32px); z-index: 10; }
   #toast.show { opacity: 1; }
   #toast.err { background: var(--danger); }
@@ -192,24 +189,7 @@
         <div class="hint" id="sEmptyHint"></div>
         <button class="btn primary" id="sSave">保存</button>
       </div>
-      <div class="card">
-        <h2>店舗・記入者のリスト（管理者のみ）</h2>
-        <div id="adminLocked">
-          <label class="field"><span class="label">管理者の合言葉</span><input type="password" id="adminCode" autocomplete="off"></label>
-          <button class="btn" id="adminOpen">開く</button>
-        </div>
-        <div id="adminEditor" class="hidden">
-          <span class="label">店舗</span>
-          <div id="storeRows"></div>
-          <button class="btn small" id="addStore">＋ 店舗を追加</button>
-          <span class="label" style="margin-top:16px">記入者</span>
-          <div id="memberRows"></div>
-          <button class="btn small" id="addMember">＋ 記入者を追加</button>
-          <div class="row-btns" style="margin-top:16px">
-            <button class="btn primary" id="adminSave">リストを保存</button>
-          </div>
-        </div>
-      </div>
+      <p class="hint">店舗・記入者のリストの変更や、質問の整理は<a href="https://makkurotsukushitsudayuya-wq.github.io/otasuke-daicho/admin/">管理者アプリ</a>で行います。</p>
     </section>
   </main>
 </div>
@@ -219,7 +199,7 @@
 <script>
 var NEW_OPTION = '__new__';
 var ALL_STORES = '全店';
-var state = { code: '', adminCode: '', data: null, editing: null, editScope: '全員', status: 'empty', catTouched: false, sending: false, recent: [] };
+var state = { code: '', data: null, editing: null, editScope: '全員', status: 'empty', catTouched: false, sending: false, recent: [] };
 
 // 質問の言葉からカテゴリを推測する(当たらなければ「その他」。あとから一覧で直せる)
 var CATEGORY_WORDS = {
@@ -394,8 +374,7 @@ function renderWho() {
 function renderDeviceSettings() {
   fillStoreSelect($('sStore'), deviceStore());
   fillNameSelect($('sName'), $('sStore').value, deviceName());
-  $('sEmptyHint').textContent = (!state.data.stores.length && !state.data.members.length) ? '店舗・記入者がまだ登録されていません。下の「管理者のみ」から追加してください。' : '';
-  if (state.adminCode) openAdminEditor();
+  $('sEmptyHint').textContent = (!state.data.stores.length && !state.data.members.length) ? '店舗・記入者がまだ登録されていません。管理者アプリで追加してください。' : '';
 }
 $('sSave').onclick = function () {
   saveDevice($('sStore').value, $('sName').value);
@@ -489,7 +468,7 @@ function sendQueue() {
     state.sending = false;
     saveQueue(loadQueue().filter(function (j) { return j.id !== job.id; }));
     var it = job.item;
-    state.data.items.push({ row: res.row, category: it.category, question: it.question, answer: '', scope: it.scope, store: it.store, updatedBy: it.updatedBy, updatedAt: '' });
+    state.data.items.push({ id: res.id, category: it.category, question: it.question, answer: '', scope: it.scope, store: it.store, updatedBy: it.updatedBy, updatedAt: '' });
     setData(state.data);
     setRecentStatus(job.id, 'ok');
     renderAlert();
@@ -526,12 +505,12 @@ function renderRecent() {
 // 似た質問がすでにあれば知らせる(重複登録の防止。保存はそのままできる)
 function norm(s) { return String(s).toLowerCase().replace(/[\s　、。・,.!！?？「」()（）]/g, ''); }
 function bigrams(s) { var out = {}; for (var i = 0; i < s.length - 1; i++) out[s.substr(i, 2)] = 1; return out; }
-function findSimilar(text, exceptRow) {
+function findSimilar(text, exceptId) {
   var q = norm(text);
   if (!state.data || q.length < 3) return [];
   var qb = bigrams(q), qn = Object.keys(qb).length;
   return state.data.items.filter(function (it) {
-    if (it.row === exceptRow) return false;
+    if (it.id === exceptId) return false;
     var t = norm(it.question);
     if (t.indexOf(q) >= 0 || q.indexOf(t) >= 0) return true;
     var tb = bigrams(t), common = 0, tn = 0;
@@ -562,7 +541,7 @@ function renderList() {
     return;
   }
   $('list').innerHTML = items.map(function (it) {
-    return '<div class="item' + (it.answer ? '' : ' empty') + '" data-row="' + it.row + '">' +
+    return '<div class="item' + (it.answer ? '' : ' empty') + '" data-id="' + esc(it.id) + '">' +
       '<div class="chips"><span class="chip">' + esc(it.category || 'その他') + '</span>' +
       '<span class="chip' + (it.scope === '社員のみ' ? ' staff' : '') + '">' + esc(it.scope) + '</span>' +
       '<span class="chip">' + esc(it.store) + '</span></div>' +
@@ -574,8 +553,8 @@ function renderList() {
 $('list').onclick = function (e) {
   var card = e.target.closest('.item');
   if (!card) return;
-  var row = Number(card.getAttribute('data-row'));
-  var it = state.data.items.filter(function (x) { return x.row === row; })[0];
+  var id = card.getAttribute('data-id');
+  var it = state.data.items.filter(function (x) { return x.id === id; })[0];
   if (it) startEdit(it);
 };
 function setStatus(v) {
@@ -623,7 +602,7 @@ $('eSave').onclick = function () {
   var q = $('eQuestion').value.trim();
   if (!q) { toast('質問を入力してください', true); return; }
   var cat = $('eCategory').value === NEW_OPTION ? $('eNewCategory').value.trim() : $('eCategory').value;
-  var item = { row: it.row, originalQuestion: it.question, question: q, answer: $('eAnswer').value.trim(), category: cat, scope: state.editScope, store: $('eStore').value, updatedBy: $('eUpdatedBy').value };
+  var item = { id: it.id, question: q, answer: $('eAnswer').value.trim(), category: cat, scope: state.editScope, store: $('eStore').value, updatedBy: $('eUpdatedBy').value };
   $('eSave').disabled = true;
   call('saveFaq', [state.code, item], function (data) {
     $('eSave').disabled = false;
@@ -638,7 +617,7 @@ $('eDelete').onclick = function () {
   var it = state.editing;
   if (!confirm('「' + it.question + '」を台帳から削除しますか？')) return;
   $('eDelete').disabled = true;
-  call('deleteFaq', [state.code, it.row, it.question], function (data) {
+  call('deleteFaq', [state.code, it.id], function (data) {
     $('eDelete').disabled = false;
     setData(data);
     renderAll();
@@ -647,93 +626,8 @@ $('eDelete').onclick = function () {
   }, function () { $('eDelete').disabled = false; });
 };
 
-// ---------- 店舗・記入者のリスト(管理者のみ) ----------
-$('adminOpen').onclick = function () {
-  var code = $('adminCode').value.trim();
-  if (!code) return;
-  call('checkAdmin', [code], function (settings) {
-    state.adminCode = code;
-    store('faqAdminCode', code);
-    state.data.stores = settings.stores;
-    state.data.members = settings.members;
-    setData(state.data);
-    openAdminEditor();
-  });
-};
-function openAdminEditor() {
-  $('adminLocked').classList.add('hidden');
-  $('adminEditor').classList.remove('hidden');
-  $('storeRows').innerHTML = '';
-  $('memberRows').innerHTML = '';
-  state.data.stores.forEach(function (s) { addStoreRow(s); });
-  state.data.members.forEach(function (m) { addMemberRow(m.name, m.store); });
-  if (!state.data.stores.length) addStoreRow('');
-  if (!state.data.members.length) addMemberRow('', '');
-}
-function removeBtn() { return '<button class="btn small" type="button" data-remove>✕</button>'; }
-function addStoreRow(value) {
-  var div = document.createElement('div');
-  div.className = 'list-row';
-  div.innerHTML = '<input type="text" placeholder="店舗名" value="' + esc(value) + '">' + removeBtn();
-  $('storeRows').appendChild(div);
-  return div;
-}
-function adminStoreNames() {
-  return Array.prototype.map.call($('storeRows').querySelectorAll('input'), function (i) { return i.value.trim(); }).filter(Boolean);
-}
-function addMemberRow(name, storeName) {
-  var div = document.createElement('div');
-  div.className = 'list-row';
-  var opts = ['<option value="">全店</option>'].concat(adminStoreNames().map(function (s) { return '<option>' + esc(s) + '</option>'; }));
-  div.innerHTML = '<input type="text" placeholder="名前" value="' + esc(name) + '"><select>' + opts.join('') + '</select>' + removeBtn();
-  div.querySelector('select').value = storeName || '';
-  $('memberRows').appendChild(div);
-  return div;
-}
-$('adminEditor').onclick = function (e) {
-  if (e.target.hasAttribute('data-remove')) { e.target.parentNode.remove(); refreshMemberStoreOptions(); }
-};
-// 店舗名を書き換えたら、記入者の店舗の選択肢も合わせる
-function refreshMemberStoreOptions() {
-  var stores = adminStoreNames();
-  Array.prototype.forEach.call($('memberRows').querySelectorAll('select'), function (sel) {
-    var cur = sel.value;
-    sel.innerHTML = '<option value="">全店</option>' + stores.map(function (s) { return '<option>' + esc(s) + '</option>'; }).join('');
-    sel.value = stores.indexOf(cur) >= 0 ? cur : '';
-  });
-}
-$('storeRows').addEventListener('change', refreshMemberStoreOptions);
-$('addStore').onclick = function () { addStoreRow('').querySelector('input').focus(); };
-$('addMember').onclick = function () { addMemberRow('', '').querySelector('input').focus(); };
-$('adminSave').onclick = function () {
-  var settings = {
-    stores: adminStoreNames(),
-    members: Array.prototype.map.call($('memberRows').children, function (row) {
-      return { name: row.querySelector('input').value.trim(), store: row.querySelector('select').value };
-    })
-  };
-  $('adminSave').disabled = true;
-  call('saveSettings', [state.adminCode, settings], function (saved) {
-    $('adminSave').disabled = false;
-    state.data.stores = saved.stores;
-    state.data.members = saved.members;
-    setData(state.data);
-    renderDeviceSettings();
-    toast('リストを保存しました');
-  }, function (msg) {
-    $('adminSave').disabled = false;
-    if (msg.indexOf('管理者') >= 0) {
-      state.adminCode = '';
-      store('faqAdminCode', null);
-      $('adminLocked').classList.remove('hidden');
-      $('adminEditor').classList.add('hidden');
-    }
-  });
-};
-
 // ---------- 起動 ----------
 state.code = store('faqEditorCode');
-state.adminCode = store('faqAdminCode');
 if (state.code && loadCache()) {
   start(loadCache());
   refresh();

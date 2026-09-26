@@ -78,6 +78,12 @@
   .q-card.empty .ta { background: var(--danger-soft); }
   .q-foot { font-size: 11px; color: var(--muted); padding: 0 8px; }
   .more { display: block; margin: 12px auto; }
+  .t-card { background: var(--card); border: 1px dashed var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+  .t-card .q { font-weight: 600; margin: 4px 0; }
+  .t-card .a { font-size: 14px; white-space: pre-wrap; color: var(--muted); }
+  .t-card .t-foot { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; font-size: 12px; color: var(--muted); }
+  .t-card .t-foot .sp { flex: 1; }
+  .tag { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--chip); color: var(--muted); margin-right: 4px; }
   .empty-state { text-align: center; color: var(--muted); padding: 32px 0; }
 
   /* まとめて操作 */
@@ -123,6 +129,7 @@
       <div class="tabs">
         <button class="tab active" data-tab="questions">質問</button>
         <button class="tab" data-tab="lists">店舗・記入者</button>
+        <button class="tab" data-tab="trash" id="tabTrash">ゴミ箱</button>
       </div>
     </div>
   </header>
@@ -170,6 +177,16 @@
       </div>
       <button class="btn primary" id="saveLists">リストを保存</button>
       <p class="hint">店舗・記入者は、スタッフ用の台帳入力アプリで選べるようになります。</p>
+    </section>
+
+    <section class="panel" id="panel-trash">
+      <div class="listhead">
+        <span id="trashCount"></span>
+        <span class="sp" style="flex:1"></span>
+        <button class="btn danger" id="emptyTrash">ゴミ箱を空にする</button>
+      </div>
+      <p class="hint">削除した質問はここに残ります。ボットはゴミ箱の質問を使いません。</p>
+      <div id="trashList"></div>
     </section>
   </main>
 </div>
@@ -264,6 +281,7 @@ $('gateBtn').onclick = function () {
 $('gateCode').onkeydown = function (e) { if (e.key === 'Enter') $('gateBtn').click(); };
 
 function setData(data) {
+  if (!data.trash) data.trash = [];
   state.data = data;
   store('faqAdminCache', JSON.stringify(data));
 }
@@ -289,9 +307,9 @@ document.querySelectorAll('.tab').forEach(function (t) {
   t.onclick = function () {
     var name = t.getAttribute('data-tab');
     document.querySelectorAll('.tab').forEach(function (x) { x.classList.toggle('active', x === t); });
-    $('panel-questions').classList.toggle('active', name === 'questions');
-    $('panel-lists').classList.toggle('active', name === 'lists');
+    ['questions', 'lists', 'trash'].forEach(function (p) { $('panel-' + p).classList.toggle('active', p === name); });
     if (name === 'lists') renderLists();
+    if (name === 'trash') renderTrash();
     renderBulk();
   };
 });
@@ -310,6 +328,7 @@ function allCategories() {
 
 function renderAll() {
   renderStats();
+  renderTrash();
   renderFilters();
   renderList();
   renderBulk();
@@ -561,7 +580,11 @@ function deleteItems(ids) {
     state.saving++;
     call('adminDelete', [state.code, ids], function () {
       state.saving--;
+      var now = new Date();
+      var stamp = now.getFullYear() + '/' + ('0' + (now.getMonth() + 1)).slice(-2) + '/' + ('0' + now.getDate()).slice(-2) + ' ' + ('0' + now.getHours()).slice(-2) + ':' + ('0' + now.getMinutes()).slice(-2);
+      state.data.trash = removed.map(function (it) { return Object.assign({}, it, { deletedAt: stamp, deletedBy: '管理者' }); }).concat(state.data.trash);
       setData(state.data);
+      renderTrash();
     }, function (msg) {
       state.saving--;
       state.data.items = state.data.items.concat(removed);
@@ -570,13 +593,68 @@ function deleteItems(ids) {
       return true;
     });
   }, 6000);
-  toast(ids.length + '件を削除しました', false, function () {
+  toast(ids.length + '件をゴミ箱に移しました', false, function () {
     cancelled = true;
     clearTimeout(timer);
     state.data.items = state.data.items.concat(removed).sort(function (a, b) { return (a._i || 0) - (b._i || 0); });
     renderAll();
   });
 }
+
+// ---------- ゴミ箱 ----------
+function renderTrash() {
+  var trash = state.data.trash || [];
+  $('tabTrash').textContent = 'ゴミ箱' + (trash.length ? '（' + trash.length + '）' : '');
+  $('trashCount').textContent = trash.length + ' 件';
+  $('emptyTrash').disabled = !trash.length;
+  if (!trash.length) { $('trashList').innerHTML = '<div class="empty-state">ゴミ箱は空です</div>'; return; }
+  $('trashList').innerHTML = trash.map(function (it) {
+    return '<div class="t-card" data-id="' + esc(it.id) + '">' +
+      '<span class="tag">' + esc(it.store) + '</span><span class="tag">' + esc(it.category || 'その他') + '</span><span class="tag">' + esc(it.scope) + '</span>' +
+      '<div class="q">' + esc(it.question) + '</div>' +
+      '<div class="a">' + (it.answer ? esc(it.answer) : '（回答なし）') + '</div>' +
+      '<div class="t-foot"><span>' + esc(it.deletedAt || '') + ' 削除' + (it.deletedBy ? '（' + esc(it.deletedBy) + '）' : '') + '</span><span class="sp"></span>' +
+      '<button class="btn" data-act="restore">元に戻す</button><button class="btn danger" data-act="purge">完全に削除</button></div>' +
+    '</div>';
+  }).join('');
+}
+$('trashList').addEventListener('click', function (e) {
+  var act = e.target.getAttribute('data-act');
+  var card = e.target.closest('.t-card');
+  if (!act || !card) return;
+  var id = card.getAttribute('data-id');
+  var it = state.data.trash.filter(function (x) { return x.id === id; })[0];
+  if (!it) return;
+  if (act === 'purge' && !confirm('「' + it.question + '」を完全に削除しますか？\n（元に戻せなくなります）')) return;
+  e.target.disabled = true;
+  if (act === 'restore') {
+    call('adminRestore', [state.code, [id]], function (restored) {
+      state.data.trash = state.data.trash.filter(function (x) { return x.id !== id; });
+      state.data.items = state.data.items.concat(restored);
+      setData(state.data);
+      renderAll();
+      toast('台帳に戻しました');
+    }, function () { e.target.disabled = false; });
+  } else {
+    call('adminPurge', [state.code, [id]], function () {
+      state.data.trash = state.data.trash.filter(function (x) { return x.id !== id; });
+      setData(state.data);
+      renderTrash();
+      toast('完全に削除しました');
+    }, function () { e.target.disabled = false; });
+  }
+});
+$('emptyTrash').onclick = function () {
+  var n = state.data.trash.length;
+  if (!n || !confirm('ゴミ箱の ' + n + ' 件をすべて完全に削除しますか？\n（元に戻せなくなります）')) return;
+  $('emptyTrash').disabled = true;
+  call('adminPurge', [state.code], function () {
+    state.data.trash = [];
+    setData(state.data);
+    renderTrash();
+    toast('ゴミ箱を空にしました');
+  }, function () { $('emptyTrash').disabled = false; });
+};
 
 // ---------- 店舗・記入者のリスト ----------
 function renderLists() {

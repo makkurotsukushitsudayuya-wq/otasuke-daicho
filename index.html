@@ -615,13 +615,13 @@ $('eSave').onclick = function () {
 $('eCancel').onclick = function () { switchTab('list'); };
 $('eDelete').onclick = function () {
   var it = state.editing;
-  if (!confirm('「' + it.question + '」を台帳から削除しますか？')) return;
+  if (!confirm('「' + it.question + '」をゴミ箱に移しますか？\n（管理者アプリから元に戻せます）')) return;
   $('eDelete').disabled = true;
-  call('deleteFaq', [state.code, it.id], function (data) {
+  call('deleteFaq', [state.code, it.id, deviceName()], function (data) {
     $('eDelete').disabled = false;
     setData(data);
     renderAll();
-    toast('削除しました');
+    toast('ゴミ箱に移しました');
     switchTab('list');
   }, function () { $('eDelete').disabled = false; });
 };

@@ -60,6 +60,12 @@
   .who { margin-top: 10px; font-size: 13px; color: var(--muted); }
   .similar { display: none; margin-top: 6px; padding: 6px 10px; border-radius: 8px; background: var(--warn-bg); color: var(--warn); font-size: 12px; }
   .similar.show { display: block; }
+  .similar .sim-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; padding: 4px 0; }
+  .plus { flex: 0 0 auto; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--accent); background: var(--card); color: var(--accent); font-size: 12px; font-weight: 600; cursor: pointer; }
+  .plus.done { border-color: var(--line); color: var(--muted); cursor: default; }
+  .seg.mode { margin-bottom: 8px; }
+  .seg.mode button { padding: 8px; font-size: 14px; font-weight: 600; }
+  .chip.hq { color: var(--accent); }
   .recent-item { display: flex; gap: 8px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
   .recent-item:first-of-type { border-top: 0; }
   .st { flex: 0 0 auto; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--chip); color: var(--muted); }
@@ -105,7 +111,7 @@
   <div class="card">
     <h1>はじめに</h1>
     <p class="hint" style="margin-top:0">次から自動で入るので、1回だけ選んでください。</p>
-    <label class="field"><span class="label">店舗</span><select id="setupStore"></select></label>
+    <label class="field"><span class="label">所属（本部または店舗）</span><select id="setupStore"></select></label>
     <label class="field"><span class="label">名前</span><select id="setupName"></select></label>
     <button class="btn primary big" id="setupBtn">これで始める</button>
     <button class="btn link" id="setupSkip" style="margin-top:12px">あとで</button>
@@ -116,6 +122,10 @@
   <header>
     <div class="bar">
       <h1>お助けボット 台帳</h1>
+      <div class="seg mode" id="modeSeg">
+        <button data-v="本部">本部への質問</button>
+        <button data-v="店舗">店舗の質問</button>
+      </div>
       <button class="alert" id="alert"></button>
       <div class="tabs">
         <button class="tab active" data-tab="quick">＋ 質問</button>
@@ -164,6 +174,9 @@
           <textarea id="eAnswer" placeholder="スタッフにそのまま送れる文で書いてください" style="min-height:120px"></textarea>
           <div class="hint">空欄のままだと「未記入」のまま。ボットは回答がある質問だけを使います。</div>
         </label>
+        <label class="field"><span class="label">区分</span>
+          <select id="eKind"><option>本部</option><option>店舗</option></select>
+        </label>
         <label class="field"><span class="label">カテゴリ</span>
           <select id="eCategory"></select>
           <input type="text" id="eNewCategory" class="hidden" placeholder="新しいカテゴリ名" style="margin-top:6px">
@@ -184,7 +197,7 @@
     <section class="panel" id="panel-settings">
       <div class="card">
         <h2>この端末</h2>
-        <label class="field"><span class="label">店舗</span><select id="sStore"></select></label>
+        <label class="field"><span class="label">所属（本部または店舗）</span><select id="sStore"></select></label>
         <label class="field"><span class="label">名前</span><select id="sName"></select></label>
         <div class="hint" id="sEmptyHint"></div>
         <button class="btn primary" id="sSave">保存</button>
@@ -199,10 +212,11 @@
 <script>
 var NEW_OPTION = '__new__';
 var ALL_STORES = '全店';
-var state = { code: '', data: null, editing: null, editScope: '全員', status: 'empty', catTouched: false, sending: false, recent: [] };
+var HQ_STORE = '本部';
+var state = { code: '', data: null, editing: null, editScope: '全員', status: 'empty', catTouched: false, sending: false, recent: [], mode: '' };
 
 // 質問の言葉からカテゴリを推測する(当たらなければ「その他」。あとから一覧で直せる)
-var CATEGORY_WORDS = {
+var STORE_WORDS = {
   '勤怠': ['遅刻', '欠勤', '休み', '早退', '出勤', '退勤', '打刻', 'タイムカード', '休憩', '体調'],
   'シフト': ['シフト', '交代', '代わり', '希望休', '勤務表'],
   'レジ・会計': ['レジ', '会計', 'お釣り', '釣り銭', '現金', 'カード', '電子マネー', 'ポイント', '領収書', '返金', '両替', 'クーポン', 'paypay', 'qr', '割引', '値引'],
@@ -214,11 +228,21 @@ var CATEGORY_WORDS = {
   '給与・手続き': ['給料', '給与', '振込', '交通費', '有給', '年末調整', '書類', '保険', 'マイナンバー', '源泉', '手続き', '口座'],
   '制服・身だしなみ': ['制服', 'エプロン', '髪', 'ネイル', '靴', '身だしなみ', '名札', '服装', 'ピアス', '帽子']
 };
+var HQ_WORDS = {
+  '経費精算': ['経費', '精算', '領収書', 'レシート', '立替', '立て替え', '交通費', '仮払', '出張'],
+  '発注・仕入れ': ['発注', '仕入', '納品', '請求書', '業者', '取引先', '見積', '注文', '支払'],
+  '事務処理': ['書類', '提出', '申請', '稟議', '押印', '印鑑', 'ハンコ', '郵送', '契約', '事務', '報告書', '日報'],
+  '労務（勤怠・休暇）': ['勤怠', '有給', '休暇', '休み', '欠勤', '残業', '打刻', 'シフト', '労災', '遅刻', '早退', '休日'],
+  '給与': ['給与', '給料', '振込', '明細', '源泉', '年末調整', '住民税', '賞与', 'ボーナス', '手当'],
+  '採用・入退社': ['採用', '面接', '求人', '入社', '退職', '退社', '雇用契約', '社会保険', '保険証', '新人', 'マイナンバー'],
+  'システム・機器': ['パソコン', 'pc', 'システム', 'アカウント', 'パスワード', 'ログイン', 'プリンタ', 'wifi', '故障', 'アプリ', 'メール', 'タブレット']
+};
 function guessCategory(text) {
+  var words = state.mode === '本部' ? HQ_WORDS : STORE_WORDS;
   var t = String(text).toLowerCase(), best = 'その他', bestScore = 0;
-  Object.keys(CATEGORY_WORDS).forEach(function (cat) {
+  Object.keys(words).forEach(function (cat) {
     var score = 0;
-    CATEGORY_WORDS[cat].forEach(function (w) { if (t.indexOf(w) >= 0) score += w.length; });
+    words[cat].forEach(function (w) { if (t.indexOf(w) >= 0) score += w.length; });
     if (score > bestScore) { bestScore = score; best = cat; }
   });
   return best;
@@ -321,8 +345,7 @@ $('gateCode').onkeydown = function (e) { if (e.key === 'Enter') $('gateBtn').cli
 
 function start(data) {
   setData(data);
-  var hasChoices = data.stores.length || data.members.length;
-  if (!store('faqDeviceDone') && hasChoices) {
+  if (!store('faqDeviceDone')) {
     fillStoreSelect($('setupStore'), deviceStore());
     fillNameSelect($('setupName'), $('setupStore').value, deviceName());
     showScreen('setup');
@@ -339,9 +362,9 @@ function deviceStore() { return store('faqDeviceStore'); }
 function deviceName() { return store('faqDeviceName'); }
 
 function fillStoreSelect(sel, selected) {
-  var stores = state.data.stores;
+  var stores = [state.data.hqStore || HQ_STORE].concat(state.data.stores);
   sel.innerHTML = '<option value="">(未選択)</option>' + stores.map(function (s) { return '<option>' + esc(s) + '</option>'; }).join('');
-  sel.value = stores.indexOf(selected) >= 0 ? selected : (stores.length === 1 ? stores[0] : '');
+  sel.value = stores.indexOf(selected) >= 0 ? selected : '';
 }
 function fillNameSelect(sel, storeName, selected) {
   var names = state.data.members.filter(function (m) { return !storeName || !m.store || m.store === storeName; }).map(function (m) { return m.name; });
@@ -367,7 +390,7 @@ $('setupSkip').onclick = function () {
 
 function renderWho() {
   var s = deviceStore(), n = deviceName();
-  $('who').innerHTML = '店舗: ' + esc(s || '未選択') + '　記入者: ' + esc(n || '未選択') + ' <button class="btn link" id="whoChange">変更</button>';
+  $('who').innerHTML = '所属: ' + esc(s || '未選択') + '　記入者: ' + esc(n || '未選択') + ' <button class="btn link" id="whoChange">変更</button>';
   $('whoChange').onclick = function () { switchTab('settings'); };
 }
 
@@ -383,11 +406,56 @@ $('sSave').onclick = function () {
   switchTab('quick');
 };
 
+// ---------- 本部への質問 / 店舗の質問 ----------
+function isHQDevice() { return deviceStore() === HQ_STORE; }
+function kindOf(it) { return it.kind || '店舗'; }
+function modeItems() { return state.data.items.filter(function (it) { return kindOf(it) === state.mode; }); }
+function catsFor(kind) { return (kind === '本部' ? state.data.hqCategories : state.data.categories) || ['その他']; }
+$('modeSeg').onclick = function (e) {
+  var v = e.target.getAttribute('data-v');
+  if (!v || v === state.mode) return;
+  state.mode = v;
+  store('faqMode', v);
+  state.catTouched = false;
+  $('catFilter').value = '';
+  renderAll();
+  checkSimilar();
+};
+
+// 「私も知りたい」を押した質問は端末に覚えておき、二重に押せないようにする
+function interestedIds() { try { return JSON.parse(store('faqInterested') || '[]'); } catch (e) { return []; } }
+function isInterested(id) { return interestedIds().indexOf(id) >= 0; }
+function markInterested(id) { var l = interestedIds(); if (l.indexOf(id) < 0) { l.push(id); store('faqInterested', JSON.stringify(l)); } }
+function plusOne(id, fromInput) {
+  var it = state.data.items.filter(function (x) { return x.id === id; })[0];
+  if (!it || isInterested(id)) return;
+  markInterested(id);
+  it.interest = (it.interest || 1) + 1;
+  setData(state.data);
+  if (fromInput) { $('qInput').value = ''; state.catTouched = false; }
+  renderList();
+  checkSimilar();
+  toast('「' + it.question + '」に＋1しました' + (fromInput ? '（新しくは登録していません）' : ''));
+  call('addInterest', [state.code, id, deviceName()], function (res) {
+    it.interest = res.interest;
+    it.interestNames = res.interestNames;
+    setData(state.data);
+    renderList();
+  }, function () {
+    it.interest = Math.max(1, (it.interest || 1) - 1);
+    store('faqInterested', JSON.stringify(interestedIds().filter(function (x) { return x !== id; })));
+    renderList();
+    checkSimilar();
+  });
+}
+
 // ---------- 描画 ----------
 function renderAll() {
+  Array.prototype.forEach.call($('modeSeg').children, function (b) { b.classList.toggle('on', b.getAttribute('data-v') === state.mode); });
+  $('qInput').placeholder = state.mode === '本部' ? (isHQDevice() ? '本部が受けた質問を入力' : '本部に聞きたいことを入力') : '聞かれた質問を入力';
   fillCategorySelect($('qCategory'), state.catTouched ? $('qCategory').value : guessCategory($('qInput').value), false);
   var catF = $('catFilter').value;
-  $('catFilter').innerHTML = '<option value="">すべてのカテゴリ</option>' + state.data.categories.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('');
+  $('catFilter').innerHTML = '<option value="">すべてのカテゴリ</option>' + catsFor(state.mode).map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('');
   $('catFilter').value = catF;
   renderWho();
   renderAlert();
@@ -395,21 +463,21 @@ function renderAll() {
   renderRecent();
 }
 
-function fillCategorySelect(sel, selected, withNew) {
-  var cats = state.data.categories.slice();
+function fillCategorySelect(sel, selected, withNew, kind) {
+  var cats = catsFor(kind || state.mode).slice();
   if (selected && selected !== NEW_OPTION && cats.indexOf(selected) < 0) cats.push(selected);
   sel.innerHTML = cats.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('') +
     (withNew ? '<option value="' + NEW_OPTION + '">＋ 新しいカテゴリ</option>' : '');
   sel.value = selected || 'その他';
 }
 
-function emptyCount() { return state.data.items.filter(function (it) { return !it.answer; }).length; }
+function emptyCount() { return modeItems().filter(function (it) { return !it.answer; }).length; }
 
 function renderAlert() {
   var n = emptyCount();
-  $('alert').textContent = '⚠ 回答が未記入の質問が ' + n + ' 件あります（タップで確認）';
+  $('alert').textContent = (state.mode === '本部' ? '⚠ 本部への質問で回答待ちが ' : '⚠ 回答が未記入の質問が ') + n + ' 件あります（タップで確認）';
   $('alert').classList.toggle('show', n > 0);
-  $('tabList').textContent = '一覧' + (n ? '（未記入 ' + n + '）' : '');
+  $('tabList').textContent = '一覧' + (n ? '（' + (state.mode === '本部' ? '回答待ち ' : '未記入 ') + n + '）' : '');
 }
 $('alert').onclick = function () { setStatus('empty'); switchTab('list'); };
 
@@ -438,7 +506,9 @@ $('qSave').onclick = quickSave;
 function quickSave() {
   var q = $('qInput').value.trim();
   if (!q) { toast('質問を入力してください', true); $('qInput').focus(); return; }
-  var item = { question: q, category: $('qCategory').value, store: deviceStore() || ALL_STORES, updatedBy: deviceName(), scope: '全員', answer: '' };
+  var item = state.mode === '本部'
+    ? { question: q, category: $('qCategory').value, kind: '本部', source: isHQDevice() ? '本部が受けた' : '社員が聞きたい', store: ALL_STORES, updatedBy: deviceName(), scope: '社員のみ', answer: '' }
+    : { question: q, category: $('qCategory').value, kind: '店舗', source: '', store: (!isHQDevice() && deviceStore()) || ALL_STORES, updatedBy: deviceName(), scope: '全員', answer: '' };
   var queue = loadQueue();
   queue.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), item: item });
   saveQueue(queue);
@@ -468,7 +538,9 @@ function sendQueue() {
     state.sending = false;
     saveQueue(loadQueue().filter(function (j) { return j.id !== job.id; }));
     var it = job.item;
-    state.data.items.push({ id: res.id, category: it.category, question: it.question, answer: '', scope: it.scope, store: it.store, updatedBy: it.updatedBy, updatedAt: '' });
+    state.data.items.push({ id: res.id, category: it.category, question: it.question, answer: '', scope: it.scope, store: it.store, updatedBy: it.updatedBy, updatedAt: '',
+      kind: it.kind || '店舗', source: it.source || '', interest: 1, interestNames: it.source === '社員が聞きたい' ? it.updatedBy : '' });
+    markInterested(res.id); // 自分で入れた質問には＋1できないようにする
     setData(state.data);
     setRecentStatus(job.id, 'ok');
     renderAlert();
@@ -509,32 +581,66 @@ function findSimilar(text, exceptId) {
   var q = norm(text);
   if (!state.data || q.length < 3) return [];
   var qb = bigrams(q), qn = Object.keys(qb).length;
-  return state.data.items.filter(function (it) {
+  var qk = keyBigrams(text), qkn = Object.keys(qk).length;
+  return modeItems().filter(function (it) {
     if (it.id === exceptId) return false;
     var t = norm(it.question);
     if (t.indexOf(q) >= 0 || q.indexOf(t) >= 0) return true;
-    var tb = bigrams(t), common = 0, tn = 0;
-    for (var k in tb) { tn++; if (qb[k]) common++; }
-    return common / Math.max(1, Math.min(qn, tn)) >= 0.5;
+    if (overlap(qb, qn, bigrams(t)) >= 0.5) return true;
+    // 言い回し(ひらがな)が違っても、漢字・カタカナの言葉(交通費・精算など)がほぼ同じなら似た質問とみなす
+    var tk = keyBigrams(it.question);
+    return qkn >= 2 && Object.keys(tk).length >= 2 && overlap(qk, qkn, tk) >= 0.5;
   }).slice(0, 3);
+}
+function overlap(ab, an, bb) {
+  var common = 0, bn = 0;
+  for (var k in bb) { bn++; if (ab[k]) common++; }
+  return common / Math.max(1, Math.min(an, bn));
+}
+// 漢字・カタカナ・英数字のかたまりだけを取り出して2文字ずつに分ける
+function keyBigrams(text) {
+  var out = {};
+  (String(text).toLowerCase().match(/[一-鿿゠-ヿa-z0-9]+/g) || []).forEach(function (w) {
+    for (var i = 0; i < w.length - 1; i++) out[w.substr(i, 2)] = 1;
+  });
+  return out;
+}
+function plusButton(it) {
+  return isInterested(it.id)
+    ? '<button class="plus done" type="button" disabled>✓ 知りたい済み（' + (it.interest || 1) + '）</button>'
+    : '<button class="plus" type="button" data-plus="' + esc(it.id) + '">＋1 私も知りたい（' + (it.interest || 1) + '）</button>';
 }
 function checkSimilar() {
   var hits = findSimilar($('qInput').value, null);
-  $('similar').innerHTML = hits.length ? '似た質問があります: ' + hits.map(function (h) { return '「' + esc(h.question) + '」'; }).join(' ') : '';
+  if (state.mode === '本部') {
+    $('similar').innerHTML = hits.length ? '似た質問があります。同じなら＋1だけでOK:' + hits.map(function (h) {
+      return '<div class="sim-row"><span>「' + esc(h.question) + '」' + (h.answer ? '（回答あり）' : '') + '</span>' + plusButton(h) + '</div>';
+    }).join('') : '';
+  } else {
+    $('similar').innerHTML = hits.length ? '似た質問があります: ' + hits.map(function (h) { return '「' + esc(h.question) + '」'; }).join(' ') : '';
+  }
   $('similar').classList.toggle('show', hits.length > 0);
 }
+// ＋1ボタンを押してもキーボードを閉じない
+$('similar').onpointerdown = function (e) { if (e.target.hasAttribute('data-plus')) e.preventDefault(); };
+$('similar').onclick = function (e) {
+  var id = e.target.getAttribute('data-plus');
+  if (id) plusOne(id, true);
+};
 
 // ---------- 一覧 ----------
 function renderList() {
   var cat = $('catFilter').value;
   var kw = $('search').value.trim().toLowerCase();
-  var items = state.data.items.filter(function (it) {
+  var items = modeItems().filter(function (it) {
     if (state.status === 'empty' && it.answer) return false;
     if (state.status === 'done' && !it.answer) return false;
     if (cat && it.category !== cat) return false;
     if (kw && (it.question + ' ' + it.answer + ' ' + it.category).toLowerCase().indexOf(kw) < 0) return false;
     return true;
   }).reverse();
+  // 本部への質問は、知りたい人が多い順に並べる
+  if (state.mode === '本部') items.sort(function (a, b) { return (b.interest || 1) - (a.interest || 1); });
   $('count').textContent = items.length + ' 件';
   if (!items.length) {
     $('list').innerHTML = '<div class="empty-state">' + (state.status === 'empty' && !cat && !kw ? '🎉 未記入の質問はありません' : '該当する質問はありません') + '</div>';
@@ -543,14 +649,20 @@ function renderList() {
   $('list').innerHTML = items.map(function (it) {
     return '<div class="item' + (it.answer ? '' : ' empty') + '" data-id="' + esc(it.id) + '">' +
       '<div class="chips"><span class="chip">' + esc(it.category || 'その他') + '</span>' +
-      '<span class="chip' + (it.scope === '社員のみ' ? ' staff' : '') + '">' + esc(it.scope) + '</span>' +
-      '<span class="chip">' + esc(it.store) + '</span></div>' +
+      (kindOf(it) === '本部'
+        ? (it.source ? '<span class="chip hq">' + esc(it.source) + '</span>' : '') + '<span class="chip">👥 ' + (it.interest || 1) + '人</span>'
+        : '<span class="chip' + (it.scope === '社員のみ' ? ' staff' : '') + '">' + esc(it.scope) + '</span><span class="chip">' + esc(it.store) + '</span>') +
+      '</div>' +
       '<div class="q">' + esc(it.question) + '</div>' +
-      (it.answer ? '<div class="a">' + esc(it.answer) + '</div>' : '<div class="a none">回答が未記入です</div>') +
-      '<div class="meta">' + esc(it.updatedBy || '') + (it.updatedAt ? '　' + esc(it.updatedAt) : '') + '</div></div>';
+      (it.answer ? '<div class="a">' + esc(it.answer) + '</div>' : '<div class="a none">' + (kindOf(it) === '本部' ? '回答待ちです' : '回答が未記入です') + '</div>') +
+      '<div class="meta">' + esc(it.updatedBy || '') + (it.updatedAt ? '　' + esc(it.updatedAt) : '') +
+      (kindOf(it) === '本部' && !it.answer ? '　' + plusButton(it) : '') + '</div></div>';
   }).join('');
 }
 $('list').onclick = function (e) {
+  var plus = e.target.getAttribute('data-plus');
+  if (plus) { plusOne(plus, false); return; }
+  if (e.target.classList.contains('plus')) return;
   var card = e.target.closest('.item');
   if (!card) return;
   var id = card.getAttribute('data-id');
@@ -571,7 +683,8 @@ function startEdit(it) {
   state.editing = it;
   $('eQuestion').value = it.question;
   $('eAnswer').value = it.answer;
-  fillCategorySelect($('eCategory'), it.category || 'その他', true);
+  $('eKind').value = kindOf(it);
+  fillCategorySelect($('eCategory'), it.category || 'その他', true, kindOf(it));
   $('eNewCategory').value = '';
   $('eNewCategory').classList.add('hidden');
   state.editScope = it.scope || '全員';
@@ -592,6 +705,7 @@ function renderEditScope() {
   }).join('');
 }
 $('eScope').onclick = function (e) { var v = e.target.getAttribute('data-v'); if (v) { state.editScope = v; renderEditScope(); } };
+$('eKind').onchange = function () { fillCategorySelect($('eCategory'), 'その他', true, this.value); };
 $('eCategory').onchange = function () {
   $('eNewCategory').classList.toggle('hidden', this.value !== NEW_OPTION);
   if (this.value === NEW_OPTION) $('eNewCategory').focus();
@@ -602,7 +716,7 @@ $('eSave').onclick = function () {
   var q = $('eQuestion').value.trim();
   if (!q) { toast('質問を入力してください', true); return; }
   var cat = $('eCategory').value === NEW_OPTION ? $('eNewCategory').value.trim() : $('eCategory').value;
-  var item = { id: it.id, question: q, answer: $('eAnswer').value.trim(), category: cat, scope: state.editScope, store: $('eStore').value, updatedBy: $('eUpdatedBy').value };
+  var item = { id: it.id, question: q, answer: $('eAnswer').value.trim(), category: cat, kind: $('eKind').value, scope: state.editScope, store: $('eStore').value, updatedBy: $('eUpdatedBy').value };
   $('eSave').disabled = true;
   call('saveFaq', [state.code, item], function (data) {
     $('eSave').disabled = false;
@@ -627,6 +741,7 @@ $('eDelete').onclick = function () {
 };
 
 // ---------- 起動 ----------
+state.mode = store('faqMode') || '本部';
 state.code = store('faqEditorCode');
 if (state.code && loadCache()) {
   start(loadCache());
